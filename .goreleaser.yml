@@ -1,0 +1,38 @@
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+checksum:
+  name_template: "checksums.txt"
+
+archives:
+  - name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - name: git-open
+    description: Opens your webbrowser
+    homepage: https://github.com/arbourd/git-open
+
+    conflicts:
+      - git-open
+
+    folder: Formula
+
+    repository:
+      owner: arbourd
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+    commit_author:
+      name: Dylan Arbour
+      email: arbourd@users.noreply.github.com
