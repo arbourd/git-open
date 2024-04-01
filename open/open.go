@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -50,11 +51,11 @@ func GetURL(arg string) (string, error) {
 		return "", fmt.Errorf("not a git repository")
 	}
 	gitdir, _ = filepath.Abs(gitdir)
-	gitroot := strings.TrimSuffix(gitdir, "/.git")
+	gitroot := strings.TrimSuffix(gitdir, ".git")
 
 	t := parseType(arg)
 	if t == Path {
-		arg = parsePath(arg, gitroot)
+		arg, _ = parsePath(arg, gitroot)
 	}
 
 	remote, ref, err := getRemoteRef(gitdir)
@@ -91,38 +92,46 @@ func GetURL(arg string) (string, error) {
 }
 
 // parsePath returns a cleaned path if the file and folder exist and belong to the root Git repository
-func parsePath(path, gitroot string) string {
+func parsePath(path, gitroot string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	path = filepath.Clean(path)
+
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return ""
+		return "", err
 	}
 	path, _ = filepath.Abs(path)
 
 	// Check if path shares Git root
 	if !strings.HasPrefix(path, gitroot) {
-		return ""
+		return "", fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
 	}
 
-	return strings.TrimPrefix(strings.Replace(path, gitroot, "", 1), "/")
+	// Remove gitroot from absolute path, making a relative path from the Git root
+	path = strings.Replace(path, gitroot, "", 1)
+
+	// Convert all path seperators to `/` and trim trailing `/`
+	path = strings.TrimPrefix(filepath.ToSlash(path), "/")
+	return path, nil
 }
 
 // getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository
-func getRemoteRef(gitroot string) (string, string, error) {
-	remote, err := gitw.RemoteURL(gitroot)
+func getRemoteRef(gitroot string) (remote string, ref string, err error) {
+	remote, err = gitw.RemoteURL(gitroot)
 	if err != nil {
 		return "", "", err
 	}
 
-	ref, err := gitw.CurrentRef(gitroot)
+	ref, err = gitw.CurrentRef(gitroot)
 	return remote, ref, err
 }
 
 // parseRemote parses the host and repository (username or organization and repository name) from a remote string
-func parseRemote(r string) (host, path string) {
-	u, _ := url.Parse(r)
-	repo := filepath.Clean(u.Path)
-	repo = strings.TrimSuffix(repo, ".git")
-	repo = strings.TrimPrefix(repo, "/")
+func parseRemote(remote string) (host, repo string) {
+	u, _ := url.Parse(remote)
+	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(u.Path), ".git"), "/")
 	return u.Host, repo
 }
 

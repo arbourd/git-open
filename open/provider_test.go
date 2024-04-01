@@ -42,25 +42,25 @@ func TestCommitURL(t *testing.T) {
 func TestPathURL(t *testing.T) {
 	cases := map[string]struct {
 		p           Provider
-		branch      string
+		ref         string
 		path        string
 		expectedURL string
 	}{
 		"github": {
 			p:           DefaultProviders[0],
-			branch:      "main",
+			ref:         "main",
 			path:        "LICENSE",
 			expectedURL: "https://github.com/arbourd/git-open/tree/main/LICENSE",
 		},
 		"gitlab": {
 			p:           DefaultProviders[1],
-			branch:      "main",
+			ref:         "main",
 			path:        "LICENSE",
 			expectedURL: "https://gitlab.com/arbourd/git-open/-/tree/main/LICENSE",
 		},
 		"bitbucket": {
 			p:           DefaultProviders[2],
-			branch:      "main",
+			ref:         "main",
 			path:        "LICENSE",
 			expectedURL: "https://bitbucket.org/arbourd/git-open/src/main/LICENSE",
 		},
@@ -68,7 +68,7 @@ func TestPathURL(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			url := c.p.PathURL(repo, c.branch, c.path)
+			url := c.p.PathURL(repo, c.ref, c.path)
 			if url != c.expectedURL {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, c.expectedURL)
 			}

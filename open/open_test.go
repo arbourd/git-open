@@ -44,19 +44,19 @@ func TestGetURL(t *testing.T) {
 		},
 		"commit sha with extension": {
 			arg:         "7605d91.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/main",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 		"commit sha as a folder": {
 			arg:         "7605d91/example.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/main",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 		"out of git dir relative path": {
 			arg:         filepath.FromSlash("../../.."),
-			expectedURL: "https://github.com/arbourd/git-open/tree/main",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 		"out of git dir absolute path": {
 			arg:         filepath.FromSlash(homedir),
-			expectedURL: "https://github.com/arbourd/git-open/tree/main",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 	}
 
@@ -175,11 +175,12 @@ func TestParsePath(t *testing.T) {
 		panic("not a git repository")
 	}
 	gitdir, _ = filepath.Abs(gitdir)
-	gitroot := strings.TrimSuffix(gitdir, "/.git")
+	gitroot := strings.TrimSuffix(gitdir, ".git")
 
 	cases := map[string]struct {
 		path         string
 		expectedPath string
+		wantErr      bool
 	}{
 		"empty argument": {
 			path:         "",
@@ -201,16 +202,26 @@ func TestParsePath(t *testing.T) {
 			path:         filepath.FromSlash(".././/LICENSE"),
 			expectedPath: "LICENSE",
 		},
-		"out of directory": {
-			path:         filepath.FromSlash("../../.."),
+		"out of git root": {
+			path:         filepath.FromSlash("../../../.."),
 			expectedPath: "",
+			wantErr:      true,
+		},
+		"file does not exist": {
+			path:         "README.txt",
+			expectedPath: "",
+			wantErr:      true,
 		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path := parsePath(c.path, gitroot)
-			if path != c.expectedPath {
+			path, err := parsePath(c.path, gitroot)
+			if err != nil && !c.wantErr {
+				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
+			} else if err == nil && c.wantErr {
+				t.Fatalf("expected error:\n\t(GOT): nil")
+			} else if path != c.expectedPath {
 				t.Fatalf("unexpected path:\n\t(GOT): %#v\n\t(WNT): %#v", path, c.expectedPath)
 			}
 		})
