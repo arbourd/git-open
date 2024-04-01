@@ -84,36 +84,54 @@ func TestGetURL(t *testing.T) {
 	}
 }
 
-func TestParseRemote(t *testing.T) {
+func TestParseRepository(t *testing.T) {
 	cases := map[string]struct {
 		remote       string
 		expectedHost string
 		expectedPath string
+		wantErr      bool
 	}{
-		"simple": {
+		"https protocol": {
 			remote:       "https://github.com/arbourd/git-open",
 			expectedHost: "github.com",
 			expectedPath: "arbourd/git-open",
 		},
-		".git suffix": {
+		"https with .git suffix": {
 			remote:       "https://github.com/arbourd/git-open.git",
 			expectedHost: "github.com",
 			expectedPath: "arbourd/git-open",
 		},
-		"extra slashes": {
+		"https with extra slashes": {
 			remote:       "https://github.com////arbourd/git-open.git",
 			expectedHost: "github.com",
 			expectedPath: "arbourd/git-open",
+		},
+		"ssh protocol": {
+			remote:       "git@github.com:arbourd/git-open.git",
+			expectedHost: "github.com",
+			expectedPath: "arbourd/git-open",
+		},
+		"git protocol": {
+			remote:       "git://github.com/arbourd/git-open.git",
+			expectedHost: "github.com",
+			expectedPath: "arbourd/git-open",
+		},
+		"invalid url": {
+			remote:  "github/arbourd/git-open.git%x",
+			wantErr: true,
 		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			host, path := parseRemote(c.remote)
-			if host != c.expectedHost {
+			host, path, err := parseRepository(c.remote)
+			if err != nil && !c.wantErr {
+				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
+			} else if err == nil && c.wantErr {
+				t.Fatalf("expected error:\n\t(GOT): nil")
+			} else if host != c.expectedHost {
 				t.Fatalf("unexpected host:\n\t(GOT): %#v\n\t(WNT): %#v", host, c.expectedHost)
-			}
-			if path != c.expectedPath {
+			} else if path != c.expectedPath {
 				t.Fatalf("unexpected path:\n\t(GOT): %#v\n\t(WNT): %#v", path, c.expectedPath)
 			}
 		})

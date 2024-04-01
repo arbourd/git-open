@@ -2,7 +2,6 @@ package open
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -11,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/arbourd/git-get/get"
 	"github.com/arbourd/git-open/gitw"
 )
 
@@ -62,7 +62,11 @@ func GetURL(arg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host, repo := parseRemote(remote)
+
+	host, repo, err := parseRepository(remote)
+	if err != nil {
+		return "", err
+	}
 
 	// Find the provider by comparing hosts
 	var p Provider
@@ -128,11 +132,15 @@ func getRemoteRef(gitroot string) (remote string, ref string, err error) {
 	return remote, ref, err
 }
 
-// parseRemote parses the host and repository (username or organization and repository name) from a remote string
-func parseRemote(remote string) (host, repo string) {
-	u, _ := url.Parse(remote)
-	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(u.Path), ".git"), "/")
-	return u.Host, repo
+// parseRepository parses the host and repository (username or organization and repository name) from a remote string
+func parseRepository(remote string) (host string, repo string, err error) {
+	url, err := get.ParseURL(remote)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to parse remote url: %s", err)
+	}
+
+	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(url.Path), ".git"), "/")
+	return url.Host, repo, nil
 }
 
 var commitSHARegex = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
