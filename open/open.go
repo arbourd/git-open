@@ -68,9 +68,11 @@ func GetURL(arg string) (string, error) {
 		return "", err
 	}
 
+	providers := append(DefaultProviders, LoadProviders()...)
+
 	// Find the provider by comparing hosts
 	var p Provider
-	for _, provider := range DefaultProviders {
+	for _, provider := range providers {
 		if strings.Contains(provider.BaseURL, host) {
 			p = provider
 			break
