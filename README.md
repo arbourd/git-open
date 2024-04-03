@@ -1,6 +1,6 @@
 # git-open
 
-`git-open` opens your browser at points it to the path you selected in the VCS.
+`git open` opens the Git repository in the web browser.
 
 ## Usage
 

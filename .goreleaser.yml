@@ -20,7 +20,7 @@ archives:
 
 brews:
   - name: git-open
-    description: Opens your webbrowser
+    description: Opens your Git repository in your browser
     homepage: https://github.com/arbourd/git-open
 
     test: |
