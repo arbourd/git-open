@@ -3,6 +3,7 @@ package open
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -139,14 +140,18 @@ func TestEscapePath(t *testing.T) {
 
 func TestLoadProviders(t *testing.T) {
 	gitconfig := filepath.Join(t.TempDir(), ".gitconfig")
-	_, err := os.Create(gitconfig)
-	if err != nil {
-		t.Fatalf("unable create .gitconfig: %s", err)
-	}
 
-	err = os.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
-	if err != nil {
-		t.Fatalf("unable to set GIT_CONFIG_GLOBAL: %s", err)
+	// Skip fixture on Windows in CI
+	if !(os.Getenv("CI") == "true" && runtime.GOOS == "windows") {
+		_, err := os.Create(gitconfig)
+		if err != nil {
+			t.Fatalf("unable create .gitconfig: %s", err)
+		}
+
+		err = os.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
+		if err != nil {
+			t.Fatalf("unable to set GIT_CONFIG_GLOBAL: %s", err)
+		}
 	}
 
 	cases := map[string]struct {
