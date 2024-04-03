@@ -1,7 +1,14 @@
 package open
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/ldez/go-git-cmd-wrapper/v2/config"
+	"github.com/ldez/go-git-cmd-wrapper/v2/git"
 )
 
 const repo = "arbourd/git-open"
@@ -125,6 +132,74 @@ func TestEscapePath(t *testing.T) {
 			url := escapePath(c.url)
 			if url != c.expectedURL {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, c.expectedURL)
+			}
+		})
+	}
+}
+
+func TestLoadProviders(t *testing.T) {
+	gitconfig := filepath.Join(t.TempDir(), ".gitconfig")
+	_, err := os.Create(gitconfig)
+	if err != nil {
+		t.Fatalf("unable create .gitconfig: %s", err)
+	}
+
+	err = os.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
+	if err != nil {
+		t.Fatalf("unable to set GIT_CONFIG_GLOBAL: %s", err)
+	}
+
+	cases := map[string]struct {
+		config            []string
+		expectedProviders []Provider
+	}{
+		"empty git config": {
+			expectedProviders: []Provider{},
+		},
+		"single provider": {
+			config: []string{
+				"open.https://my.domain.dev.commitprefix -/commit",
+				"open.https://my.domain.dev.pathprefix -/tree",
+			},
+			expectedProviders: []Provider{
+				{BaseURL: "https://my.domain.dev", CommitPrefix: "-/commit", PathPrefix: "-/tree"},
+			},
+		},
+		"multple providers": {
+			config: []string{
+				"open.https://git.example1.dev.commitprefix -/commit",
+				"open.https://git.example1.dev.pathprefix -/tree",
+				"open.https://git.example2.dev.commitprefix commit",
+				"open.https://git.example2.dev.pathprefix tree",
+			},
+			expectedProviders: []Provider{
+				{BaseURL: "https://git.example1.dev", CommitPrefix: "-/commit", PathPrefix: "-/tree"},
+				{BaseURL: "https://git.example2.dev", CommitPrefix: "commit", PathPrefix: "tree"},
+			},
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			// removes all `open.https://` Git config entries
+			out, _ := git.Config(config.Global, config.GetRegexp(getRegex, ""))
+			for _, v := range strings.Split(strings.TrimSpace(out), "\n") {
+				key := strings.Split(strings.TrimSpace(v), " ")[0]
+
+				git.Config(config.Global, config.Unset(key, ""))
+			}
+
+			for _, v := range c.config {
+				s := strings.Split(v, " ")
+				git.Config(config.Global, config.Entry(s[0], s[1]))
+			}
+
+			p := LoadProviders()
+			if len(p) != len(c.expectedProviders) {
+				t.Logf("unexpected number of providers\n\t(GOT): %#v\n\t(WNT): %#v", len(p), len(c.expectedProviders))
+			}
+			if !cmp.Equal(p, c.expectedProviders) {
+				t.Fatalf("unexpected providers:\n\t(GOT): %#v\n\t(WNT): %#v", p, c.expectedProviders)
 			}
 		})
 	}

@@ -28,6 +28,35 @@ Open a different repository than `cwd`.
 $ git -C ~/src/my-repo open
 ```
 
+### Providers
+
+By default, three providers [github.com](https://github.com), [gitlab.com](https://gitlab.com) and [bitbucket.org](https://bitbucket.org) are supported.
+
+To add custom Git providers and their URLs, set their values within the global `git config`.
+
+```ini
+[open "https://git.mydomain.dev"]
+    commitprefix = commit
+    pathprefix = tree
+```
+
+This can also be set using the `git` CLI.
+
+```console
+$ git config --global open.https://git.mydomain.dev.commitprefix commit
+$ git config --global open.https://git.mydomain.dev.pathprefix tree
+```
+
+`commitprefix` and `pathprefix` are used to template the URI for your provider.
+
+```go
+fmt.Println(host + "/" + repository + "/" + commitprefix )
+// https://git.mydomain.dev/<repository>/commit
+
+fmt.Println(host + "/" + repository + "/" + pathprefix )
+// https://git.mydomain.dev/<repository>/tree
+```
+
 ## Installation
 
 Install with `brew`.

@@ -20,7 +20,7 @@ func TestGetURL(t *testing.T) {
 		gitdir      string
 		arg         string
 		expectedURL string
-		err         string
+		wantErr     bool
 	}{
 		"no argument": {
 			arg:         "",
@@ -73,10 +73,10 @@ func TestGetURL(t *testing.T) {
 			}
 
 			url, err := GetURL(c.arg)
-			if err != nil && c.err == "" {
+			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
-			} else if err == nil && len(c.err) > 0 {
-				t.Fatalf("expected error:\n\t(GOT): nil\n\t(WNT): %s", c.err)
+			} else if err == nil && c.wantErr {
+				t.Fatalf("expected error:\n\t(GOT): nil\n")
 			} else if url != expectedURL {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
 			}
