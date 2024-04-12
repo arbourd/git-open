@@ -138,7 +138,7 @@ func getRemoteRef(gitroot string) (remote string, ref string, err error) {
 func parseRepository(remote string) (host string, repo string, err error) {
 	url, err := get.ParseURL(remote)
 	if err != nil {
-		return "", "", fmt.Errorf("unable to parse remote url: %s", err)
+		return "", "", fmt.Errorf("unable to parse remote url: %w", err)
 	}
 
 	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(url.Path), ".git"), "/")
