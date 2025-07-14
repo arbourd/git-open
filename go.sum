@@ -2,5 +2,5 @@ github.com/arbourd/git-get v0.6.1 h1:IYMN6gbtJcADrUpwflVR/5ERwovQ1F4nENSh7CaJnQ4
 github.com/arbourd/git-get v0.6.1/go.mod h1:haRy2V/Odc+rDhrJhy098yNLZt0qNYu8Q752SGCHz9M=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/ldez/go-git-cmd-wrapper/v2 v2.8.0 h1:+lD1DY7jRCy0hBTgrlVSRQtfQvyCr4SGOlf+C+eXBtM=
-github.com/ldez/go-git-cmd-wrapper/v2 v2.8.0/go.mod h1:0eUeas7XtKDPKQbB0KijfaMPbuQ/cIprtoTRiwaUoFg=
+github.com/ldez/go-git-cmd-wrapper/v2 v2.9.1 h1:QJRB9Gs5i/h6TVJI6yl09Qm6rNooznRiKwIw+VIxd90=
+github.com/ldez/go-git-cmd-wrapper/v2 v2.9.1/go.mod h1:0eUeas7XtKDPKQbB0KijfaMPbuQ/cIprtoTRiwaUoFg=
