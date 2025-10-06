@@ -139,7 +139,15 @@ func TestEscapePath(t *testing.T) {
 }
 
 func TestLoadProviders(t *testing.T) {
-	gitconfig := filepath.Join(t.TempDir(), ".gitconfig")
+	root := t.TempDir()
+	gitconfig := filepath.Join(root, ".gitconfig")
+
+	if runtime.GOOS == "darwin" {
+		err := os.Setenv("XDG_CONFIG_HOME", root)
+		if err != nil {
+			t.Fatalf("unable to set XDG_CONFIG_HOME: %s", err)
+		}
+	}
 
 	// Skip fixture on Windows in CI
 	if !(os.Getenv("CI") == "true" && runtime.GOOS == "windows") {
@@ -170,7 +178,7 @@ func TestLoadProviders(t *testing.T) {
 				{BaseURL: "https://my.domain.dev", CommitPrefix: "-/commit", PathPrefix: "-/tree"},
 			},
 		},
-		"multple providers": {
+		"multiple providers": {
 			config: []string{
 				"open.https://git.example1.dev.commitprefix -/commit",
 				"open.https://git.example1.dev.pathprefix -/tree",
