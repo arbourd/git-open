@@ -1,6 +1,6 @@
 module github.com/arbourd/git-open
 
-go 1.22
+go 1.25
 
 require (
 	github.com/arbourd/git-get v0.6.1
