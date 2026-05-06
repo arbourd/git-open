@@ -110,17 +110,18 @@ func parsePath(path, gitroot string) (string, error) {
 	}
 	path, _ = filepath.Abs(path)
 
-	// Check if path shares Git root
-	if !strings.HasPrefix(path, gitroot) {
+	// Check if path is within Git root
+	rel, err := filepath.Rel(gitroot, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
 	}
 
-	// Remove gitroot from absolute path, making a relative path from the Git root
-	path = strings.Replace(path, gitroot, "", 1)
+	if rel == "." {
+		return "", nil
+	}
 
-	// Convert all path seperators to `/` and trim trailing `/`
-	path = strings.TrimPrefix(filepath.ToSlash(path), "/")
-	return path, nil
+	// Convert all path separators to `/` and trim trailing `/`
+	return filepath.ToSlash(rel), nil
 }
 
 // getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository

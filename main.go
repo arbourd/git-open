@@ -36,6 +36,6 @@ func processArgs(args []string) (string, error) {
 	case 2:
 		return args[1], nil
 	default:
-		return "", fmt.Errorf("recieved %d args, accepts 1", len(args)-1)
+		return "", fmt.Errorf("received %d args, accepts 1", len(args)-1)
 	}
 }
