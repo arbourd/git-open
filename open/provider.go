@@ -75,17 +75,25 @@ func LoadProviders() []Provider {
 		commitPrefix string
 		pathPrefix   string
 	})
-	for _, v := range strings.Split(out, "\n") {
-		s := strings.Split(strings.TrimPrefix(v, "open."), " ")
+	for _, line := range strings.Split(out, "\n") {
+		s := strings.Split(line, " ")
+		if len(s) != 2 {
+			continue
+		}
+		fullKey, value := s[0], s[1]
 
-		var value string
-		if len(s) == 2 {
-			value = s[1]
+		if !strings.HasPrefix(fullKey, "open.") {
+			continue
 		}
 
-		s = strings.Split(s[0], ".")
-		key := s[len(s)-1]
-		url := strings.Join(s[0:len(s)-1], ".")
+		// Strip "open." and find the last dot to separate URL from prefix type
+		fullKey = strings.TrimPrefix(fullKey, "open.")
+		i := strings.LastIndex(fullKey, ".")
+		if i == -1 {
+			continue
+		}
+
+		url, key := fullKey[:i], fullKey[i+1:]
 
 		if urls[url] == nil {
 			urls[url] = &struct {

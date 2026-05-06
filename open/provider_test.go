@@ -190,6 +190,15 @@ func TestLoadProviders(t *testing.T) {
 				{BaseURL: "https://git.example2.dev", CommitPrefix: "commit", PathPrefix: "tree"},
 			},
 		},
+		"multiple subdomains": {
+			config: []string{
+				"open.https://git.internal.corp.com.commitprefix commit",
+				"open.https://git.internal.corp.com.pathprefix tree",
+			},
+			expectedProviders: []Provider{
+				{BaseURL: "https://git.internal.corp.com", CommitPrefix: "commit", PathPrefix: "tree"},
+			},
+		},
 	}
 
 	for name, c := range cases {
