@@ -3,6 +3,7 @@ package open
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,13 @@ func TestGetURL(t *testing.T) {
 	if err != nil {
 		panic("cannot get home directory")
 	}
+
+	f, err := os.Create("abcdef1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	t.Cleanup(func() { os.Remove("abcdef1") })
 
 	cases := map[string]struct {
 		gitdir      string
@@ -42,6 +50,10 @@ func TestGetURL(t *testing.T) {
 			arg:         "7605d91",
 			expectedURL: "https://github.com/arbourd/git-open/commit/7605d91",
 		},
+		"hex-named file": {
+			arg:         "abcdef1",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/abcdef1",
+		},
 		"commit sha with extension": {
 			arg:         "7605d91.txt",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
@@ -64,7 +76,7 @@ func TestGetURL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ref, err := gitw.CurrentRef(c.gitdir)
 			if err != nil {
-				panic("Unable to get local ref for test")
+				t.Fatalf("Unable to get local ref for test: %v", err)
 			}
 
 			expectedURL := c.expectedURL
@@ -79,6 +91,64 @@ func TestGetURL(t *testing.T) {
 				t.Fatalf("expected error:\n\t(GOT): nil\n")
 			} else if url != expectedURL {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
+			}
+		})
+	}
+}
+
+func TestGetURLWorktree(t *testing.T) {
+	mainDir := t.TempDir()
+	worktreeDir := filepath.Join(t.TempDir(), "wt")
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = mainDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("remote", "add", "origin", "https://github.com/example/repo.git")
+	run("commit", "--allow-empty", "-m", "init")
+	run("worktree", "add", "--detach", worktreeDir)
+
+	if err := os.WriteFile(filepath.Join(worktreeDir, "file.txt"), []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(worktreeDir)
+
+	ref, err := gitw.CurrentRef(worktreeDir)
+	if err != nil {
+		t.Fatalf("unable to get ref: %v", err)
+	}
+
+	cases := map[string]struct {
+		arg         string
+		expectedURL string
+	}{
+		"root": {
+			arg:         "",
+			expectedURL: "https://github.com/example/repo",
+		},
+		"path": {
+			arg:         "file.txt",
+			expectedURL: fmt.Sprintf("https://github.com/example/repo/tree/%s/file.txt", ref),
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			url, err := GetURL(c.arg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if url != c.expectedURL {
+				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, c.expectedURL)
 			}
 		})
 	}
@@ -119,6 +189,16 @@ func TestParseRepository(t *testing.T) {
 		"invalid url": {
 			remote:  "github/arbourd/git-open.git%x",
 			wantErr: true,
+		},
+		"local absolute path": {
+			remote:       "/Users/dylan/repo",
+			expectedHost: "",
+			expectedPath: "Users/dylan/repo",
+		},
+		"local relative path": {
+			remote:       "../repo",
+			expectedHost: "",
+			expectedPath: "../repo",
 		},
 	}
 
@@ -188,12 +268,10 @@ func TestParseType(t *testing.T) {
 }
 
 func TestParsePath(t *testing.T) {
-	gitdir, err := gitw.GitDir(".")
+	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
 		panic("not a git repository")
 	}
-	gitdir, _ = filepath.Abs(gitdir)
-	gitroot := strings.TrimSuffix(gitdir, ".git")
 
 	cases := map[string]struct {
 		path         string

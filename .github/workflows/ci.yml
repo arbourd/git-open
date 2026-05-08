@@ -28,10 +28,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
       - run: go mod download
-      - run: go test -race ./...
 
+      - run: go vet ./...
+      - run: go test -v -race ./...
       - run: go build .
       - run: ./git-open LICENSE
 
