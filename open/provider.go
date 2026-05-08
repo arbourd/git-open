@@ -1,7 +1,9 @@
 package open
 
 import (
+	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/ldez/go-git-cmd-wrapper/v2/config"
@@ -71,6 +73,7 @@ func LoadProviders() []Provider {
 		return p
 	}
 
+	var order []string
 	urls := make(map[string]*Provider)
 	for line := range strings.SplitSeq(out, "\n") {
 		s := strings.SplitN(line, " ", 2)
@@ -95,6 +98,7 @@ func LoadProviders() []Provider {
 		if entry == nil {
 			entry = &Provider{}
 			urls[rawURL] = entry
+			order = append(order, rawURL)
 		}
 
 		switch key {
@@ -105,7 +109,13 @@ func LoadProviders() []Provider {
 		}
 	}
 
-	for k, v := range urls {
+	for _, k := range order {
+		u, err := url.Parse(k)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			fmt.Fprintf(os.Stderr, "warning: invalid provider URL in git config: %q\n", k)
+			continue
+		}
+		v := urls[k]
 		v.BaseURL = k
 		p = append(p, *v)
 	}

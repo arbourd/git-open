@@ -1,6 +1,7 @@
 package open
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,19 @@ import (
 )
 
 const repo = "arbourd/git-open"
+
+func TestDefaultProviders(t *testing.T) {
+	for _, p := range DefaultProviders {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil {
+			t.Errorf("provider %q: invalid BaseURL: %v", p.BaseURL, err)
+			continue
+		}
+		if u.Host == "" {
+			t.Errorf("provider %q: BaseURL has no host", p.BaseURL)
+		}
+	}
+}
 
 func TestCommitURL(t *testing.T) {
 	cases := map[string]struct {
@@ -208,21 +222,34 @@ func TestLoadProviders(t *testing.T) {
 				{BaseURL: "https://git.internal.corp.com", CommitPrefix: "commit", PathPrefix: "tree"},
 			},
 		},
+		"invalid url": {
+			config: []string{
+				"open.not-a-url.commitprefix commit",
+				"open.not-a-url.pathprefix tree",
+			},
+			expectedProviders: []Provider{},
+		},
+		"non-web scheme": {
+			config: []string{
+				"open.ssh://git.example.dev.commitprefix commit",
+				"open.ssh://git.example.dev.pathprefix tree",
+			},
+			expectedProviders: []Provider{},
+		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			// removes all `open.https://` Git config entries
 			out, _ := git.Config(config.Global, config.GetRegexp(getRegex, ""))
-			for _, v := range strings.Split(strings.TrimSpace(out), "\n") {
-				key := strings.Split(strings.TrimSpace(v), " ")[0]
-
+			for v := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+				key, _, _ := strings.Cut(strings.TrimSpace(v), " ")
 				git.Config(config.Global, config.Unset(key, ""))
 			}
 
 			for _, v := range c.config {
-				s := strings.Split(v, " ")
-				git.Config(config.Global, config.Entry(s[0], s[1]))
+				key, val, _ := strings.Cut(v, " ")
+				git.Config(config.Global, config.Entry(key, val))
 			}
 
 			p := LoadProviders()

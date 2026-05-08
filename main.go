@@ -10,20 +10,20 @@ import (
 func main() {
 	arg, err := processArgs(os.Args)
 	if err != nil {
-		fmt.Printf("error: \"%s\"\n", err)
+		fmt.Fprintf(os.Stderr, "error: \"%s\"\n", err)
 		os.Exit(1)
 	}
 
 	url, err := open.GetURL(arg)
 	if err != nil {
-		fmt.Printf("error: \"%s\"\n", err)
+		fmt.Fprintf(os.Stderr, "error: \"%s\"\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Printf("Opening %s in your browser.\n", url)
 	err = open.InBrowser(url)
 	if err != nil {
-		fmt.Printf("error: unable to open in browser: \"%s\"\n", err)
+		fmt.Fprintf(os.Stderr, "error: unable to open in browser: \"%s\"\n", err)
 		os.Exit(1)
 	}
 }
