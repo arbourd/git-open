@@ -2,6 +2,7 @@ package open
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -18,7 +19,7 @@ import (
 type Type int
 
 const (
-	// Folder is a specific commit in the repository
+	// Commit is a specific commit in the repository
 	Commit Type = iota
 
 	// Path is a file, folder or path in the repository
@@ -46,19 +47,27 @@ func InBrowser(url string) error {
 
 // GetURL returns the URL to open based on the arg provided
 func GetURL(arg string) (string, error) {
-	gitdir, err := gitw.GitDir(".")
+	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
-		return "", fmt.Errorf("not a git repository")
+		// If toplevel fails, we might be in a bare repo
+		gitroot, err = gitw.AbsoluteGitDir(".")
+		if err != nil {
+			return "", fmt.Errorf("not a git repository")
+		}
 	}
-	gitdir, _ = filepath.Abs(gitdir)
-	gitroot := strings.TrimSuffix(gitdir, ".git")
 
 	t := parseType(arg)
+	if t == Commit {
+		if _, err := os.Stat(arg); err == nil {
+			t = Path
+		}
+	}
 	if t == Path {
+		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL.
 		arg, _ = parsePath(arg, gitroot)
 	}
 
-	remote, ref, err := getRemoteRef(gitdir)
+	remote, ref, err := getRemoteRef(gitroot)
 	if err != nil {
 		return "", err
 	}
@@ -67,19 +76,25 @@ func GetURL(arg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if host == "" {
+		return "", fmt.Errorf("local remotes are not supported")
+	}
 
 	providers := append(DefaultProviders, LoadProviders()...)
 
-	// Find the provider by comparing hosts
+	// Find the provider by exact host comparison.
 	var p Provider
 	for _, provider := range providers {
-		if strings.Contains(provider.BaseURL, host) {
+		u, err := url.Parse(provider.BaseURL)
+		if err != nil {
+			continue
+		}
+		if u.Host == host {
 			p = provider
 			break
 		}
 	}
 
-	// Error if provider not found
 	if len(p.BaseURL) == 0 {
 		return "", fmt.Errorf("unable to find provider for: \"%s\"", host)
 	}
@@ -109,6 +124,9 @@ func parsePath(path, gitroot string) (string, error) {
 		return "", err
 	}
 	path, _ = filepath.Abs(path)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
 
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)

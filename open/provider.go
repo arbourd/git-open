@@ -71,10 +71,7 @@ func LoadProviders() []Provider {
 		return p
 	}
 
-	urls := make(map[string]*struct {
-		commitPrefix string
-		pathPrefix   string
-	})
+	urls := make(map[string]*Provider)
 	for line := range strings.SplitSeq(out, "\n") {
 		s := strings.SplitN(line, " ", 2)
 		if len(s) != 2 {
@@ -96,27 +93,21 @@ func LoadProviders() []Provider {
 
 		entry := urls[rawURL]
 		if entry == nil {
-			entry = &struct {
-				commitPrefix string
-				pathPrefix   string
-			}{}
+			entry = &Provider{}
 			urls[rawURL] = entry
 		}
 
 		switch key {
 		case "commitprefix":
-			entry.commitPrefix = value
+			entry.CommitPrefix = value
 		case "pathprefix":
-			entry.pathPrefix = value
+			entry.PathPrefix = value
 		}
 	}
 
 	for k, v := range urls {
-		p = append(p, Provider{
-			BaseURL:      k,
-			CommitPrefix: v.commitPrefix,
-			PathPrefix:   v.pathPrefix,
-		})
+		v.BaseURL = k
+		p = append(p, *v)
 	}
 
 	return p

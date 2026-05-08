@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/ldez/go-git-cmd-wrapper/v2/config"
 	"github.com/ldez/go-git-cmd-wrapper/v2/git"
 )
@@ -126,6 +127,14 @@ func TestEscapePath(t *testing.T) {
 			url:         "https://github.com/arbourd/git-open/tree/main/file with a space.txt",
 			expectedURL: "https://github.com/arbourd/git-open/tree/main/file%20with%20a%20space.txt",
 		},
+		"trailing slash": {
+			url:         "https://github.com/arbourd/git-open/",
+			expectedURL: "https://github.com/arbourd/git-open",
+		},
+		"hash in branch": {
+			url:         "https://github.com/arbourd/git-open/tree/fix/#123",
+			expectedURL: "https://github.com/arbourd/git-open/tree/fix/%23123",
+		},
 	}
 
 	for name, c := range cases {
@@ -220,7 +229,8 @@ func TestLoadProviders(t *testing.T) {
 			if len(p) != len(c.expectedProviders) {
 				t.Logf("unexpected number of providers\n\t(GOT): %#v\n\t(WNT): %#v", len(p), len(c.expectedProviders))
 			}
-			if !cmp.Equal(p, c.expectedProviders) {
+			sortOpt := cmpopts.SortSlices(func(a, b Provider) bool { return a.BaseURL < b.BaseURL })
+			if !cmp.Equal(p, c.expectedProviders, sortOpt) {
 				t.Fatalf("unexpected providers:\n\t(GOT): %#v\n\t(WNT): %#v", p, c.expectedProviders)
 			}
 		})
