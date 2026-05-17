@@ -8,6 +8,35 @@ import (
 	"github.com/ldez/go-git-cmd-wrapper/v2/types"
 )
 
+func TestConfigGetRegexp(t *testing.T) {
+	dir := t.TempDir()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("config", "open.https://git.example.dev.commitprefix", "commit")
+	run("config", "open.https://git.example.dev.pathprefix", "tree")
+
+	t.Chdir(dir)
+
+	out := ConfigGetRegexp(`^open\..*prefix$`)
+	if !strings.Contains(out, "open.https://git.example.dev.commitprefix commit") {
+		t.Fatalf("unexpected output:\n\t(GOT): %q", out)
+	}
+	if !strings.Contains(out, "open.https://git.example.dev.pathprefix tree") {
+		t.Fatalf("unexpected output:\n\t(GOT): %q", out)
+	}
+}
+
 func TestCwd(t *testing.T) {
 	cases := map[string]struct {
 		path         string

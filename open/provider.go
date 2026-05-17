@@ -6,8 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldez/go-git-cmd-wrapper/v2/config"
-	"github.com/ldez/go-git-cmd-wrapper/v2/git"
+	"github.com/arbourd/git-open/gitw"
 )
 
 // DefaultProviders are a list of supported Providers
@@ -67,8 +66,7 @@ const getRegex = `^open\..*prefix$`
 //	  pathprefix = tree
 func LoadProviders() []Provider {
 	p := []Provider{}
-	out, _ := git.Config(config.Global, config.GetRegexp(getRegex, ""))
-	out = strings.TrimSpace(out)
+	out := gitw.ConfigGetRegexp(getRegex)
 	if len(out) == 0 {
 		return p
 	}

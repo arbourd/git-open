@@ -3,6 +3,7 @@ package gitw
 import (
 	"strings"
 
+	"github.com/ldez/go-git-cmd-wrapper/v2/config"
 	"github.com/ldez/go-git-cmd-wrapper/v2/git"
 	"github.com/ldez/go-git-cmd-wrapper/v2/revparse"
 	"github.com/ldez/go-git-cmd-wrapper/v2/types"
@@ -69,4 +70,11 @@ func CurrentRef(path string) (string, error) {
 	}
 
 	return ref, nil
+}
+
+// ConfigGetRegexp returns trimmed git config output for all keys matching pattern.
+// Reads all config scopes (system, global, local) with local taking precedence over global for the same key.
+func ConfigGetRegexp(pattern string) string {
+	out, _ := git.Config(config.GetRegexp(pattern, ""))
+	return strings.TrimSpace(out)
 }

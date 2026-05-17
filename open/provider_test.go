@@ -3,6 +3,7 @@ package open
 import (
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -264,5 +265,45 @@ func TestLoadProviders(t *testing.T) {
 				t.Fatalf("unexpected providers:\n\t(GOT): %#v\n\t(WNT): %#v", p, c.expectedProviders)
 			}
 		})
+	}
+}
+
+func TestLoadProvidersLocal(t *testing.T) {
+	// Redirect global config to an empty file so only local config is visible.
+	globalConfig := filepath.Join(t.TempDir(), ".gitconfig")
+	f, err := os.Create(globalConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
+
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("config", "open.https://local.example.dev.commitprefix", "commit")
+	run("config", "open.https://local.example.dev.pathprefix", "tree")
+
+	t.Chdir(dir)
+
+	providers := LoadProviders()
+	expected := []Provider{{
+		BaseURL:      "https://local.example.dev",
+		CommitPrefix: "commit",
+		PathPrefix:   "tree",
+	}}
+
+	sortOpt := cmpopts.SortSlices(func(a, b Provider) bool { return a.BaseURL < b.BaseURL })
+	if !cmp.Equal(providers, expected, sortOpt) {
+		t.Fatalf("unexpected providers:\n\t(GOT): %#v\n\t(WNT): %#v", providers, expected)
 	}
 }

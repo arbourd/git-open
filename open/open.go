@@ -35,11 +35,11 @@ func InBrowser(url string) error {
 
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", "--", url)
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", "--", url)
 	}
 
 	return cmd.Start()
@@ -99,17 +99,17 @@ func GetURL(arg string) (string, error) {
 		return "", fmt.Errorf("unable to find provider for: \"%s\"", host)
 	}
 
-	var url string
+	var openURL string
 	switch t {
 	case Commit:
-		url = p.CommitURL(repo, arg)
+		openURL = p.CommitURL(repo, arg)
 	case Path:
-		url = p.PathURL(repo, ref, arg)
+		openURL = p.PathURL(repo, ref, arg)
 	case Root:
-		url = p.RootURL(repo)
+		openURL = p.RootURL(repo)
 	}
 
-	return url, nil
+	return openURL, nil
 }
 
 // parsePath returns a cleaned path if the file and folder exist and belong to the root Git repository

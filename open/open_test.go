@@ -96,6 +96,95 @@ func TestGetURL(t *testing.T) {
 	}
 }
 
+func TestGetURLErrors(t *testing.T) {
+	git := func(t *testing.T, dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	cases := map[string]struct {
+		setup   func(t *testing.T, dir string)
+		wantErr string
+	}{
+		"not a git repository": {
+			setup:   func(t *testing.T, dir string) {},
+			wantErr: "not a git repository",
+		},
+		"local remote": {
+			setup: func(t *testing.T, dir string) {
+				git(t, dir, "init")
+				git(t, dir, "config", "user.email", "test@example.com")
+				git(t, dir, "config", "user.name", "Test")
+				git(t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "local", "repo"))
+				git(t, dir, "commit", "--allow-empty", "-m", "init")
+			},
+			wantErr: "local remotes are not supported",
+		},
+		"unsupported provider": {
+			setup: func(t *testing.T, dir string) {
+				git(t, dir, "init")
+				git(t, dir, "config", "user.email", "test@example.com")
+				git(t, dir, "config", "user.name", "Test")
+				git(t, dir, "remote", "add", "origin", "https://unknown.example.com/user/repo.git")
+				git(t, dir, "commit", "--allow-empty", "-m", "init")
+			},
+			wantErr: `unable to find provider for: "unknown.example.com"`,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			c.setup(t, dir)
+			t.Chdir(dir)
+
+			_, err := GetURL("")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), c.wantErr) {
+				t.Fatalf("unexpected error:\n\t(GOT): %q\n\t(WNT): contains %q", err.Error(), c.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetURLBareRepo(t *testing.T) {
+	mainDir := t.TempDir()
+	bareDir := t.TempDir()
+
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run(mainDir, "init")
+	run(mainDir, "config", "user.email", "test@example.com")
+	run(mainDir, "config", "user.name", "Test")
+	run(mainDir, "remote", "add", "origin", "https://github.com/example/repo.git")
+	run(mainDir, "commit", "--allow-empty", "-m", "init")
+	run(mainDir, "clone", "--bare", mainDir, bareDir)
+	run(bareDir, "remote", "set-url", "origin", "https://github.com/example/repo.git")
+
+	t.Chdir(bareDir)
+
+	url, err := GetURL("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if url != "https://github.com/example/repo" {
+		t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, "https://github.com/example/repo")
+	}
+}
+
 func TestGetURLWorktree(t *testing.T) {
 	mainDir := t.TempDir()
 	worktreeDir := filepath.Join(t.TempDir(), "wt")
