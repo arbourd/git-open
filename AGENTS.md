@@ -20,7 +20,7 @@ open/
   open_test.go        integration tests (run against the real checked-out repo)
   provider_test.go    unit + integration tests for provider loading
 gitw/
-  gitw.go             thin git wrappers: Toplevel, AbsoluteGitDir, RemoteURL, CurrentRef
+  gitw.go             thin git wrappers: Toplevel, AbsoluteGitDir, RemoteURL, CurrentRef, ConfigGetRegexp
   gitw_test.go        unit tests for gitw
 ```
 
@@ -46,9 +46,9 @@ main() → GetURL(arg) → parseType → parsePath / getRemoteRef → parseRepos
 
 **Error handling:** `fmt.Errorf("context: %w", err)`. Explicit errors: `"local remotes are not supported"`, `"unable to find provider for: <host>"`.
 
-**Providers:** default providers are `github.com`, `gitlab.com`, `bitbucket.org`. Custom providers can be added via `git config --global open.<https-url>.{commitprefix,pathprefix}`; non-http/https or missing host → stderr warning + skip. `BaseURL` must be an `http`/`https` URL with a non-empty host — `TestDefaultProviders` enforces this for built-in defaults.
+**Providers:** default providers are `github.com`, `gitlab.com`, `bitbucket.org`. Custom providers can be added via `git config open.<https-url>.{commitprefix,pathprefix}` (local repo config takes precedence over global); non-http/https or missing host → stderr warning + skip. `BaseURL` must be an `http`/`https` URL with a non-empty host — `TestDefaultProviders` enforces this for built-in defaults.
 
-**Tests:** `TestGetURL` and `TestParsePath` in `open/open_test.go` run against the real checked-out repo — do not move `open/` without updating them. `TestLoadProviders` isolates global git config via `GIT_CONFIG_GLOBAL`. `gitw` functions are thin wrappers over `go-git-cmd-wrapper`: `Toplevel`, `AbsoluteGitDir`, `RemoteURL`, `CurrentRef`; empty `path` arg → cwd.
+**Tests:** `TestGetURL` and `TestParsePath` in `open/open_test.go` run against the real checked-out repo — do not move `open/` without updating them. `TestGetURLErrors`, `TestGetURLBareRepo`, and `TestGetURLWorktree` spin up hermetic temp repos. `TestLoadProviders` isolates global git config via `GIT_CONFIG_GLOBAL`. `gitw` functions are thin wrappers over `go-git-cmd-wrapper`: `Toplevel`, `AbsoluteGitDir`, `RemoteURL`, `CurrentRef`, `ConfigGetRegexp`; empty `path` arg → cwd.
 
 ## Do not
 
