@@ -26,6 +26,9 @@ func TestDefaultProviders(t *testing.T) {
 		if u.Host == "" {
 			t.Errorf("provider %q: BaseURL has no host", p.BaseURL)
 		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			t.Errorf("provider %q: BaseURL scheme must be http or https, got %q", p.BaseURL, u.Scheme)
+		}
 	}
 }
 
