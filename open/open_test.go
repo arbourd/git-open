@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -68,6 +69,30 @@ func TestGetURL(t *testing.T) {
 		},
 		"out of git dir absolute path": {
 			arg:         filepath.FromSlash(homedir),
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+		},
+		"file with line": {
+			arg:         "open_test.go:3",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L3",
+		},
+		"file with line range": {
+			arg:         "open_test.go:3-10",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L3-L10",
+		},
+		"file with line zero drops the line, keeps the file": {
+			arg:         "open_test.go:0",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go",
+		},
+		"file with reversed line range": {
+			arg:         "open_test.go:10-3",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L10-L3",
+		},
+		"non-numeric suffix is not a line spec, no literal match falls back to root": {
+			arg:         "open_test.go:abc",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+		},
+		"literal colon filename with no matching file falls back to root": {
+			arg:         "notes:42",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 	}
@@ -243,6 +268,32 @@ func TestGetURLWorktree(t *testing.T) {
 	}
 }
 
+func TestGetURLWindowsAbsolutePath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows drive-letter path parsing only applies on windows")
+	}
+
+	ref, err := gitw.CurrentRef(".")
+	if err != nil {
+		t.Fatalf("unable to get local ref for test: %v", err)
+	}
+
+	abs, err := filepath.Abs("open_test.go")
+	if err != nil {
+		t.Fatalf("unable to get absolute path: %v", err)
+	}
+
+	url, err := GetURL(abs + ":3-10")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedURL := fmt.Sprintf("https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L3-L10", ref)
+	if url != expectedURL {
+		t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
+	}
+}
+
 func TestParseRepository(t *testing.T) {
 	cases := map[string]struct {
 		remote       string
@@ -356,6 +407,124 @@ func TestParseType(t *testing.T) {
 	}
 }
 
+func TestStripLine(t *testing.T) {
+	cases := map[string]struct {
+		arg           string
+		expectedPath  string
+		expectedStart int
+		expectedEnd   int
+	}{
+		"no line suffix": {
+			arg:          "main.go",
+			expectedPath: "main.go",
+		},
+		"single line": {
+			arg:           "main.go:3",
+			expectedPath:  "main.go",
+			expectedStart: 3,
+		},
+		"line range": {
+			arg:           "main.go:3-10",
+			expectedPath:  "main.go",
+			expectedStart: 3,
+			expectedEnd:   10,
+		},
+		"nested path with line range": {
+			arg:           "a/b/main.go:3-10",
+			expectedPath:  "a/b/main.go",
+			expectedStart: 3,
+			expectedEnd:   10,
+		},
+		"multiple colons splits on the last one": {
+			arg:           "a:b:3",
+			expectedPath:  "a:b",
+			expectedStart: 3,
+		},
+		"trailing colon falls back to full arg": {
+			arg:          "main.go:",
+			expectedPath: "main.go:",
+		},
+		"no path before colon falls back to full arg": {
+			arg:          ":3",
+			expectedPath: ":3",
+		},
+		"non-numeric suffix falls back to full arg": {
+			arg:          "main.go:abc",
+			expectedPath: "main.go:abc",
+		},
+		"non-numeric range end falls back to full arg": {
+			arg:          "main.go:5-abc",
+			expectedPath: "main.go:5-abc",
+		},
+		"windows absolute path with no line suffix falls back to full arg": {
+			arg:          `C:\Example\file.txt`,
+			expectedPath: `C:\Example\file.txt`,
+		},
+		"windows absolute path with line range": {
+			arg:           `C:\Example\file.txt:5-10`,
+			expectedPath:  `C:\Example\file.txt`,
+			expectedStart: 5,
+			expectedEnd:   10,
+		},
+		"windows absolute path with reversed range": {
+			arg:           `C:\Example\file.txt:10-3`,
+			expectedPath:  `C:\Example\file.txt`,
+			expectedStart: 10,
+			expectedEnd:   3,
+		},
+		"trailing hyphen falls back to start": {
+			arg:           "main.go:3-",
+			expectedPath:  "main.go",
+			expectedStart: 3,
+		},
+		"line zero drops to path": {
+			arg:          "main.go:0",
+			expectedPath: "main.go",
+		},
+		"range end zero falls back to start": {
+			arg:           "main.go:5-0",
+			expectedPath:  "main.go",
+			expectedStart: 5,
+		},
+		"range start zero drops to path": {
+			arg:          "main.go:0-10",
+			expectedPath: "main.go",
+		},
+		"reversed range is allowed": {
+			arg:           "main.go:10-3",
+			expectedPath:  "main.go",
+			expectedStart: 10,
+			expectedEnd:   3,
+		},
+		"reversed range close together is allowed": {
+			arg:           "main.go:5-1",
+			expectedPath:  "main.go",
+			expectedStart: 5,
+			expectedEnd:   1,
+		},
+		"negative start drops to path": {
+			arg:          "main.go:-1-5",
+			expectedPath: "main.go",
+		},
+		"equal range": {
+			arg:           "main.go:5-5",
+			expectedPath:  "main.go",
+			expectedStart: 5,
+			expectedEnd:   5,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			path, start, end := stripLine(c.arg)
+			if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
+				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v end=%#v\n\t(WNT): path=%#v start=%#v end=%#v",
+					path, start, end, c.expectedPath, c.expectedStart, c.expectedEnd)
+			}
+		})
+	}
+}
+
 func TestParsePath(t *testing.T) {
 	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
@@ -363,9 +532,11 @@ func TestParsePath(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		path         string
-		expectedPath string
-		wantErr      bool
+		path          string
+		expectedPath  string
+		expectedStart int
+		expectedEnd   int
+		wantErr       bool
 	}{
 		"empty argument": {
 			path:         "",
@@ -378,6 +549,11 @@ func TestParsePath(t *testing.T) {
 		"local file": {
 			path:         "open_test.go",
 			expectedPath: "open/open_test.go",
+		},
+		"local file with line": {
+			path:          "open_test.go:3",
+			expectedPath:  "open/open_test.go",
+			expectedStart: 3,
 		},
 		"relative file": {
 			path:         filepath.FromSlash("../LICENSE"),
@@ -397,17 +573,31 @@ func TestParsePath(t *testing.T) {
 			expectedPath: "",
 			wantErr:      true,
 		},
+		"path walks through a file": {
+			path:         filepath.FromSlash("open_test.go/foo"),
+			expectedPath: "",
+			wantErr:      true,
+		},
+		"git root with line is dropped": {
+			path:         filepath.FromSlash("../:5"),
+			expectedPath: "",
+		},
+		"directory with line is dropped": {
+			path:         filepath.FromSlash("../open:5"),
+			expectedPath: "open",
+		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, err := parsePath(c.path, gitroot)
+			path, start, end, err := parsePath(c.path, gitroot)
 			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
 			} else if err == nil && c.wantErr {
 				t.Fatalf("expected error:\n\t(GOT): nil")
-			} else if path != c.expectedPath {
-				t.Fatalf("unexpected path:\n\t(GOT): %#v\n\t(WNT): %#v", path, c.expectedPath)
+			} else if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
+				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v end=%#v\n\t(WNT): path=%#v start=%#v end=%#v",
+					path, start, end, c.expectedPath, c.expectedStart, c.expectedEnd)
 			}
 		})
 	}

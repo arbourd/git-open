@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/arbourd/git-get/get"
@@ -62,9 +63,10 @@ func GetURL(arg string) (string, error) {
 			t = Path
 		}
 	}
+	var lstart, lend int
 	if t == Path {
-		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL.
-		arg, _ = parsePath(arg, gitroot)
+		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL
+		arg, lstart, lend, _ = parsePath(arg, gitroot)
 	}
 
 	remote, ref, err := getRemoteRef(gitroot)
@@ -80,12 +82,12 @@ func GetURL(arg string) (string, error) {
 		return "", fmt.Errorf("local remotes are not supported")
 	}
 
-	providers := append(DefaultProviders, LoadProviders()...)
+	providers := Providers()
 
 	// Find the provider by exact host comparison.
 	var p Provider
 	for _, provider := range providers {
-		u, err := url.Parse(provider.BaseURL)
+		u, err := url.Parse(provider.BaseURL())
 		if err != nil {
 			continue
 		}
@@ -95,7 +97,7 @@ func GetURL(arg string) (string, error) {
 		}
 	}
 
-	if len(p.BaseURL) == 0 {
+	if len(p.BaseURL()) == 0 {
 		return "", fmt.Errorf("unable to find provider for: \"%s\"", host)
 	}
 
@@ -104,7 +106,7 @@ func GetURL(arg string) (string, error) {
 	case Commit:
 		openURL = p.CommitURL(repo, arg)
 	case Path:
-		openURL = p.PathURL(repo, ref, arg)
+		openURL = p.PathURL(repo, ref, arg, lstart, lend)
 	case Root:
 		openURL = p.RootURL(repo)
 	}
@@ -112,17 +114,30 @@ func GetURL(arg string) (string, error) {
 	return openURL, nil
 }
 
-// parsePath returns a cleaned path if the file and folder exist and belong to the root Git repository
-func parsePath(path, gitroot string) (string, error) {
+// parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers
+func parsePath(path, gitroot string) (string, int, int, error) {
 	if path == "" {
-		return "", nil
+		return "", 0, 0, nil
+	}
+
+	var lstart, lend int
+	if stripped, start, end := stripLine(path); stripped != path {
+		// Prefer the literal, colon-suffixed argument when it names a real
+		// file or directory; otherwise treat the suffix as a line spec.
+		if _, statErr := os.Stat(path); statErr != nil {
+			path, lstart, lend = stripped, start, end
+		}
 	}
 	path = filepath.Clean(path)
 
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return "", err
+	info, err := os.Stat(path)
+	if err != nil && (os.IsNotExist(err) || ancestorIsFile(path)) {
+		return "", 0, 0, err
 	}
+	if err == nil && info.IsDir() {
+		lstart, lend = 0, 0
+	}
+
 	path, _ = filepath.Abs(path)
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		path = resolved
@@ -131,15 +146,32 @@ func parsePath(path, gitroot string) (string, error) {
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
+		return "", 0, 0, fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
 	}
 
 	if rel == "." {
-		return "", nil
+		return "", 0, 0, nil
 	}
 
 	// Convert all path separators to `/` and trim trailing `/`
-	return filepath.ToSlash(rel), nil
+	return filepath.ToSlash(rel), lstart, lend, nil
+}
+
+// ancestorIsFile reports whether path is invalid directory because an ancestor
+// is a file -- POSIX's ENOTDIR or Windows' ERROR_PATH_NOT_FOUND
+func ancestorIsFile(path string) bool {
+	dir := filepath.Dir(path)
+	for {
+		parent, err := os.Stat(dir)
+		if err == nil {
+			return !parent.IsDir()
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			return false
+		}
+		dir = next
+	}
 }
 
 // getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository
@@ -162,6 +194,37 @@ func parseRepository(remote string) (host string, repo string, err error) {
 
 	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(url.Path), ".git"), "/")
 	return url.Host, repo, nil
+}
+
+// lineSuffixRegex matches trailing line numbers
+var lineSuffixRegex = regexp.MustCompile(`^[0-9-]+$`)
+
+// stripLine splits a trailing line suffix from arg, returning the path and line numbers
+func stripLine(arg string) (path string, start int, end int) {
+	i := strings.LastIndex(arg, ":")
+	if i <= 0 {
+		return arg, 0, 0
+	}
+	path, suffix := arg[:i], arg[i+1:]
+	if !lineSuffixRegex.MatchString(suffix) {
+		return arg, 0, 0
+	}
+
+	before, after, isRange := strings.Cut(suffix, "-")
+
+	start, err := strconv.Atoi(before)
+	if err != nil || start < 1 {
+		return path, 0, 0
+	}
+	if !isRange {
+		return path, start, 0
+	}
+
+	end, err = strconv.Atoi(after)
+	if err != nil || end < 1 {
+		return path, start, 0
+	}
+	return path, start, end
 }
 
 var commitSHARegex = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
