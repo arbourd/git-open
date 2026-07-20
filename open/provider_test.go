@@ -71,6 +71,11 @@ func TestCommitURL(t *testing.T) {
 			commit:      "7605d91",
 			expectedURL: "https://bitbucket.org/arbourd/git-open/commits/7605d91",
 		},
+		"codeberg": {
+			p:           defaultProviders[3],
+			commit:      "7605d91",
+			expectedURL: "https://codeberg.org/arbourd/git-open/commit/7605d91",
+		},
 	}
 
 	for name, c := range cases {
@@ -124,6 +129,12 @@ func TestPathURL(t *testing.T) {
 			ref:         "main",
 			path:        "main.go",
 			expectedURL: "https://bitbucket.org/arbourd/git-open/src/main/main.go",
+		},
+		"codeberg": {
+			p:           defaultProviders[3],
+			ref:         "main",
+			path:        "main.go",
+			expectedURL: "https://codeberg.org/arbourd/git-open/tree/main/main.go",
 		},
 	}
 
@@ -186,6 +197,18 @@ func TestLineAnchor(t *testing.T) {
 			end:         10,
 			expectedURL: "#lines-3:10",
 		},
+		"codeberg single line": {
+			p:           defaultProviders[3],
+			start:       3,
+			end:         0,
+			expectedURL: "#L3",
+		},
+		"codeberg range": {
+			p:           defaultProviders[3],
+			start:       3,
+			end:         10,
+			expectedURL: "#L3-L10",
+		},
 		"single-verb format single line": {
 			p:           Provider{lineFormat: "#line-%d"},
 			start:       3,
@@ -238,6 +261,10 @@ func TestRootURL(t *testing.T) {
 		"bitbucket": {
 			p:           defaultProviders[2],
 			expectedURL: "https://bitbucket.org/arbourd/git-open",
+		},
+		"codeberg": {
+			p:           defaultProviders[3],
+			expectedURL: "https://codeberg.org/arbourd/git-open",
 		},
 	}
 
