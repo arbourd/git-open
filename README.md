@@ -37,7 +37,14 @@ $ git -C ~/src/my-repo open
 
 ### Providers
 
-By default, three providers [github.com](https://github.com), [gitlab.com](https://gitlab.com) and [bitbucket.org](https://bitbucket.org) are supported.
+By default, four providers are supported: [github.com](https://github.com), [gitlab.com](https://gitlab.com), [bitbucket.org](https://bitbucket.org) and [codeberg.org](https://codeberg.org).
+
+| Provider  | URL                 | Commit prefix | Path prefix | Line format |
+| --------- | ----------------------- | ---------- | -------- | ------------  |
+| GitHub    | `https://github.com`    | `commit`   | `tree`   | `L%l-L%l`     |
+| GitLab    | `https://gitlab.com`    | `-/commit` | `-/tree` | `L%l-%l`      |
+| Bitbucket | `https://bitbucket.org` | `commits`  | `src`    | `lines-%l:%l` |
+| Codeberg  | `https://codeberg.org`  | `commit`   | `tree`   | `L%l-L%l`     |
 
 To add custom Git providers and their URLs, set their values within the global `git config`.
 

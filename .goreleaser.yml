@@ -31,11 +31,11 @@ brews:
 
       cd "git-open" do
         assert_match "Opening https://github.com/arbourd/git-open",
-                    shell_output("#{bin}/git-open")
-        assert_match "Opening https://github.com/arbourd/git-open/tree/main/LICENSE",
-                    shell_output("#{bin}/git-open LICENSE")
+                     shell_output("#{bin}/git-open")
+        assert_match "Opening https://github.com/arbourd/git-open/tree/main/main.go",
+                     shell_output("#{bin}/git-open main.go")
         assert_match "Opening https://github.com/arbourd/git-open/commit/71e081deeb92764e1bae203419ac72de1d935d2f",
-                    shell_output("#{bin}/git-open 71e081deeb92764e1bae203419ac72de1d935d2f")
+                     shell_output("#{bin}/git-open 71e081deeb92764e1bae203419ac72de1d935d2f")
       end
 
     conflicts:

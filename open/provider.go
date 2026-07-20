@@ -40,6 +40,15 @@ var defaultProviders = []Provider{
 		lineFormat:      "#lines-%d",
 		lineFormatRange: "#lines-%d:%d",
 	},
+	{
+		baseURL:      "https://codeberg.org",
+		commitPrefix: "commit",
+		pathPrefix:   "tree",
+
+		rawLineFormat:   "L%l-L%l",
+		lineFormat:      "#L%d",
+		lineFormatRange: "#L%d-L%d",
+	},
 }
 
 func Providers() []Provider {
