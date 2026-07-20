@@ -227,11 +227,11 @@ func TestLineAnchor(t *testing.T) {
 			end:         0,
 			expectedURL: "",
 		},
-		"reverse start and end": {
-			p:           Provider{},
-			start:       3,
-			end:         0,
-			expectedURL: "",
+		"github reversed range": {
+			p:           defaultProviders[0],
+			start:       10,
+			end:         3,
+			expectedURL: "#L10-L3",
 		},
 	}
 
