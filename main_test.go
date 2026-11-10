@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -8,33 +10,101 @@ func TestProcessArgs(t *testing.T) {
 	cases := map[string]struct {
 		args        []string
 		expectedArg string
-		wantErr     bool
+		expectedOut string
+		wantDone    bool
+		wantErr     string
 	}{
 		"no argument": {
-			args:        []string{"git-open"},
-			expectedArg: "",
+			args: []string{},
 		},
 		"one argument": {
-			args:        []string{"git-open", "LICENSE"},
+			args:        []string{"LICENSE"},
 			expectedArg: "LICENSE",
 		},
 		"two arguments": {
-			args:        []string{"git-open", "LICENSE", "README.md"},
-			expectedArg: "",
-			wantErr:     true,
+			args:    []string{"LICENSE", "README.md"},
+			wantErr: "too many arguments",
+		},
+		"help": {
+			args:        []string{"--help"},
+			expectedOut: "Usage: git-open",
+			wantDone:    true,
+		},
+		"short help after path": {
+			args:        []string{"LICENSE", "-h"},
+			expectedOut: "Usage: git-open",
+			wantDone:    true,
+		},
+		"version": {
+			args:        []string{"--version"},
+			expectedOut: "git-open dev\n",
+			wantDone:    true,
+		},
+		"short version": {
+			args:        []string{"-v"},
+			expectedOut: "git-open dev\n",
+			wantDone:    true,
+		},
+		"unknown option": {
+			args:    []string{"--foo"},
+			wantErr: `unknown option "--foo"`,
+		},
+		"unknown short option": {
+			args:    []string{"-x"},
+			wantErr: `unknown option "-x"`,
+		},
+		"double dash makes path positional": {
+			args:        []string{"--", "-v"},
+			expectedArg: "-v",
+		},
+		"help wins over unknown option": {
+			args:        []string{"--foo", "--help"},
+			expectedOut: "Usage: git-open",
+			wantDone:    true,
+		},
+		"version wins over too many arguments": {
+			args:        []string{"a", "b", "-v"},
+			expectedOut: "git-open dev\n",
+			wantDone:    true,
+		},
+		"help after double dash is a path": {
+			args:        []string{"--", "--help"},
+			expectedArg: "--help",
+		},
+		"double dash alone": {
+			args: []string{"--"},
+		},
+		"double dash with two paths": {
+			args:    []string{"--", "a", "b"},
+			wantErr: "too many arguments",
 		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			arg, err := processArgs(c.args)
+			var out bytes.Buffer
+			arg, done, err := processArgs(c.args, &out)
 
-			if err != nil && !c.wantErr {
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("unexpected error:\n\t(GOT): %v\n\t(WNT): %q", err, c.wantErr)
+				}
+				if !strings.Contains(err.Error(), usage) {
+					t.Fatalf("error does not include usage:\n\t(GOT): %v", err)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
-			} else if err == nil && c.wantErr {
-				t.Fatalf("expected error:\n\t(GOT): nil\n")
-			} else if arg != c.expectedArg {
+			}
+			if arg != c.expectedArg {
 				t.Fatalf("unexpected arg:\n\t(GOT): %#v\n\t(WNT): %#v", arg, c.expectedArg)
+			}
+			if done != c.wantDone {
+				t.Fatalf("unexpected done:\n\t(GOT): %v\n\t(WNT): %v", done, c.wantDone)
+			}
+			if !strings.Contains(out.String(), c.expectedOut) {
+				t.Fatalf("unexpected output:\n\t(GOT): %q\n\t(WNT): contains %q", out.String(), c.expectedOut)
 			}
 		})
 	}
