@@ -290,7 +290,7 @@ func TestFromConfig(t *testing.T) {
 	}
 
 	// Skip fixture on Windows in CI
-	if !(os.Getenv("CI") == "true" && runtime.GOOS == "windows") {
+	if os.Getenv("CI") != "true" || runtime.GOOS != "windows" {
 		_, err := os.Create(gitconfig)
 		if err != nil {
 			t.Fatalf("unable create .gitconfig: %s", err)
@@ -426,12 +426,12 @@ func TestFromConfig(t *testing.T) {
 			out, _ := git.Config(config.Global, config.GetRegexp(getRegex, ""))
 			for v := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 				key, _, _ := strings.Cut(strings.TrimSpace(v), " ")
-				git.Config(config.Global, config.Unset(key, ""))
+				_, _ = git.Config(config.Global, config.Unset(key, ""))
 			}
 
 			for _, v := range c.config {
 				key, val, _ := strings.Cut(v, " ")
-				git.Config(config.Global, config.Entry(key, val))
+				_, _ = git.Config(config.Global, config.Entry(key, val))
 			}
 
 			p := fromConfig()

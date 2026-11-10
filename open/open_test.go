@@ -23,7 +23,7 @@ func TestGetURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	t.Cleanup(func() { os.Remove("abcdef1") })
+	t.Cleanup(func() { _ = os.Remove("abcdef1") })
 
 	cases := map[string]struct {
 		gitdir      string
