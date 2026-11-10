@@ -3,6 +3,8 @@ version: 2
 builds:
   - env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
     goos:
       - linux
       - darwin
@@ -16,6 +18,10 @@ checksum:
 
 archives:
   - name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README*
+      - man/*
     format_overrides:
       - goos: windows
         formats:

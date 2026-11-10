@@ -35,6 +35,12 @@ Open a different repository than `cwd`.
 $ git -C ~/src/my-repo open
 ```
 
+Open a path that starts with a dash.
+
+```console
+$ git open -- -odd-file-name
+```
+
 ### Providers
 
 By default, four providers are supported: [github.com](https://github.com), [gitlab.com](https://gitlab.com), [bitbucket.org](https://bitbucket.org) and [codeberg.org](https://codeberg.org).

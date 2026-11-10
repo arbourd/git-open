@@ -1,0 +1,71 @@
+.TH GIT-OPEN 1 "2026-11-10" "git-open" "User Commands"
+.SH NAME
+git-open \- open a git repository, file, or commit in the browser
+.SH SYNOPSIS
+.B git-open
+.RI [ options ]
+.RI [ path | commit ]
+.SH DESCRIPTION
+.B git-open
+opens the current repository in the web browser. With an argument, it opens
+that file, folder, or commit instead. Providers are matched by the host of the
+remote URL.
+.PP
+If the argument is missing, outside the repository, or not found, the
+repository root is opened.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Print usage information and exit.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.B \-\-
+Treat every following argument as a path, even if it begins with a dash.
+.SH ARGUMENTS
+.TP
+.I path
+A file or folder in the repository. A trailing
+.I :line
+or
+.I :start\-end
+opens that line or range of lines of a file.
+.TP
+.I commit
+A commit hash of 7 to 64 hexadecimal characters.
+.SH CONFIGURATION
+Providers other than github.com, gitlab.com, bitbucket.org and codeberg.org
+are added with git config. Local repository config takes precedence over global.
+.TP
+.B open.<url>.commitprefix
+Path segment between the repository and a commit hash. Required.
+.TP
+.B open.<url>.pathprefix
+Path segment between the repository and a ref. Required.
+.TP
+.B open.<url>.lineformat
+Line anchor template where
+.B %l
+is a line number. At most two
+.B %l
+may be given, for the start and end lines. Optional.
+.PP
+.RS
+.EX
+git config \-\-global open.https://git.example.com.commitprefix commit
+git config \-\-global open.https://git.example.com.pathprefix tree
+git config \-\-global open.https://git.example.com.lineformat "L%l\-L%l"
+.EE
+.RE
+.SH EXAMPLES
+.EX
+$ git open
+$ git open main.go
+$ git open main.go:42\-50
+$ git open 7605d91
+$ git \-C ~/src/my\-repo open
+$ git open \-\- \-odd\-file\-name
+.EE
+.SH SEE ALSO
+.BR git (1)
