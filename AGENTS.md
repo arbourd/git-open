@@ -17,7 +17,7 @@ actionlint            # local only; not run in CI
 
 ```
 main.go               CLI entry point — processArgs (flags, usage), Version (set by goreleaser ldflags)
-main_test.go          unit test for processArgs (help/version, unknown option, too many arguments, `--`)
+main_test.go          unit test for processArgs (help/version, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
 man/git-open.1        Man page (must be updated whenever flags or usage change); shipped in release archives
 .goreleaser.yml       Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
 .golangci.yml         golangci-lint config (errcheck excludes `(*os.File).Close`)
@@ -46,13 +46,13 @@ main() → processArgs → GetURL(arg) → parseType → parsePath (→ stripLin
 5. Parse host + repo path with `parseRepository` → delegates to `git-get`'s `get.ParseURL`.
 6. Match provider by exact host comparison: `defaultProviders` first, then `fromConfig()` results (both via `Providers()`). URL patterns: `{BaseURL}/{repo}[/{CommitPrefix|PathPrefix}/{ref/sha}[/{path}]]`; all URLs run through `escapePath` (`url.PathEscape`, unescape `/`, trim trailing `/`).
 7. For `Path` with lines, append `Provider.lineAnchor(start, end)` using `lineFormatRange` (`%d` verbs, converted from raw `%l` by `parseRawLineFormat`); uses single-verb `lineFormat` (dropping `end`) when `end` is 0 or `lineFormatRange` is absent.
-8. Build and return the URL.
+8. Build and return the URL. With `-n`/`--no-browser`, `main` prints it bare to stdout instead of calling `InBrowser`.
 
 ## Hard constraints
 
 **Git operations:** use `gitw` (or `ldez/go-git-cmd-wrapper/v2` directly). Never use `exec.Command("git", ...)` raw.
 
-**CLI flags:** `-h`/`--help` and `-v`/`--version` exit 0 and win over other args before `--`. Unknown options and extra args are `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`). Git intercepts `git open --help` (man page), so `-h` is the in-binary path. Update the `usage` const and `man/git-open.1` together.
+**CLI flags:** `-n`/`--no-browser` prints only the URL to stdout and never opens the browser (a failed write exits 1). It can appear before or after the path. `-h`/`--help` and `-v`/`--version` exit 0 and win over `-n` and other args before `--`. Any new flag needs cases in `TestProcessArgs`. Unknown options and extra args are `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`). Git intercepts `git open --help` (man page), so `-h` is the in-binary path. Update the `usage` const and `man/git-open.1` together.
 
 **Core/CLI separation:** keep URL generation logic in `open/` decoupled from `main.go`.
 
@@ -65,6 +65,6 @@ main() → processArgs → GetURL(arg) → parseType → parsePath (→ stripLin
 ## Do not
 
 - Use `exec.Command("git", ...)` directly — use `gitw` or `go-git-cmd-wrapper`.
-- Add logic to `main.go` beyond arg parsing and error printing.
+- Add logic to `main.go` beyond arg parsing, printing the URL (`-n`/`--no-browser`), opening the browser, and error printing.
 - Add a default provider without cases in `TestCommitURL`, `TestPathURL`, `TestLineAnchor`, `TestRootURL`, `TestDefaultProvidersLineFormat` — for user-specific instances prefer `git config` over a hardcoded addition.
 - Hardcode path separators — use `filepath.ToSlash` when building URLs from filesystem paths.

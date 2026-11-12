@@ -1,4 +1,4 @@
-.TH GIT-OPEN 1 "2026-11-10" "git-open" "User Commands"
+.TH GIT-OPEN 1 "2026-11-12" "git-open" "User Commands"
 .SH NAME
 git-open \- open a git repository, file, or commit in the browser
 .SH SYNOPSIS
@@ -14,6 +14,9 @@ remote URL.
 If the argument is missing, outside the repository, or not found, the
 repository root is opened.
 .SH OPTIONS
+.TP
+.BR \-n ", " \-\-no\-browser
+Print the URL to standard output instead of opening it in the browser.
 .TP
 .BR \-h ", " \-\-help
 Print usage information and exit.
@@ -64,6 +67,7 @@ $ git open
 $ git open main.go
 $ git open main.go:42\-50
 $ git open 7605d91
+$ git open main.go \-n
 $ git \-C ~/src/my\-repo open
 $ git open \-\- \-odd\-file\-name
 .EE
