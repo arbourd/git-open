@@ -11,6 +11,7 @@ func TestProcessArgs(t *testing.T) {
 		args        []string
 		expectedArg string
 		expectedOut string
+		noBrowser   bool
 		wantDone    bool
 		wantErr     string
 	}{
@@ -23,6 +24,55 @@ func TestProcessArgs(t *testing.T) {
 		},
 		"two arguments": {
 			args:    []string{"LICENSE", "README.md"},
+			wantErr: "too many arguments",
+		},
+		"no-browser short": {
+			args:      []string{"-n"},
+			noBrowser: true,
+		},
+		"no-browser long after path": {
+			args:        []string{"LICENSE", "--no-browser"},
+			expectedArg: "LICENSE",
+			noBrowser:   true,
+		},
+		"no-browser before path": {
+			args:        []string{"-n", "LICENSE"},
+			expectedArg: "LICENSE",
+			noBrowser:   true,
+		},
+		"no-browser repeated": {
+			args:      []string{"-n", "--no-browser"},
+			noBrowser: true,
+		},
+		"double dash makes no-browser a path": {
+			args:        []string{"--", "-n"},
+			expectedArg: "-n",
+		},
+		"no-browser then double dash then path": {
+			args:        []string{"-n", "--", "--no-browser"},
+			expectedArg: "--no-browser",
+			noBrowser:   true,
+		},
+		"no-browser after double dash is an extra argument": {
+			args:    []string{"--", "LICENSE", "-n"},
+			wantErr: "too many arguments",
+		},
+		"no-browser with help": {
+			args:        []string{"-n", "--help"},
+			expectedOut: "Usage: git-open",
+			wantDone:    true,
+		},
+		"no-browser with version": {
+			args:        []string{"--no-browser", "-v"},
+			expectedOut: "git-open dev\n",
+			wantDone:    true,
+		},
+		"no-browser with unknown option": {
+			args:    []string{"-n", "--foo"},
+			wantErr: `unknown option "--foo"`,
+		},
+		"no-browser with two paths": {
+			args:    []string{"-n", "a", "b"},
 			wantErr: "too many arguments",
 		},
 		"help": {
@@ -83,7 +133,7 @@ func TestProcessArgs(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer
-			arg, done, err := processArgs(c.args, &out)
+			arg, noBrowser, done, err := processArgs(c.args, &out)
 
 			if c.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
@@ -99,6 +149,9 @@ func TestProcessArgs(t *testing.T) {
 			}
 			if arg != c.expectedArg {
 				t.Fatalf("unexpected arg:\n\t(GOT): %#v\n\t(WNT): %#v", arg, c.expectedArg)
+			}
+			if noBrowser != c.noBrowser {
+				t.Fatalf("unexpected noBrowser:\n\t(GOT): %v\n\t(WNT): %v", noBrowser, c.noBrowser)
 			}
 			if done != c.wantDone {
 				t.Fatalf("unexpected done:\n\t(GOT): %v\n\t(WNT): %v", done, c.wantDone)

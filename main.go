@@ -21,11 +21,12 @@ Arguments:
                Files accept a :line or :start-end suffix
 
 Options:
-  -h, --help     Show this help message
-  -v, --version  Show version`
+  -n, --no-browser  Print the URL instead of opening it
+  -h, --help        Show this help message
+  -v, --version     Show version`
 
 func main() {
-	arg, done, err := processArgs(os.Args[1:], os.Stdout)
+	arg, noBrowser, done, err := processArgs(os.Args[1:], os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
@@ -40,6 +41,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if noBrowser {
+		if _, err := fmt.Println(url); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	fmt.Printf("Opening %s in your browser.\n", url)
 	err = open.InBrowser(url)
 	if err != nil {
@@ -48,9 +57,9 @@ func main() {
 	}
 }
 
-// processArgs returns the single path or commit argument, or done after printing help or version.
+// processArgs returns the single path or commit argument and whether to skip the browser, or done after printing help or version.
 // A "--" makes every later argument positional.
-func processArgs(args []string, stdout io.Writer) (arg string, done bool, err error) {
+func processArgs(args []string, stdout io.Writer) (arg string, noBrowser, done bool, err error) {
 	// Help and version win wherever they appear before "--".
 	for _, a := range args {
 		if a == "--" {
@@ -59,10 +68,10 @@ func processArgs(args []string, stdout io.Writer) (arg string, done bool, err er
 		switch a {
 		case "-h", "--help":
 			_, err = fmt.Fprintln(stdout, usage)
-			return "", true, err
+			return "", false, true, err
 		case "-v", "--version":
 			_, err = fmt.Fprintf(stdout, "git-open %s\n", Version)
-			return "", true, err
+			return "", false, true, err
 		}
 	}
 
@@ -72,14 +81,16 @@ func processArgs(args []string, stdout io.Writer) (arg string, done bool, err er
 		switch {
 		case positional || !strings.HasPrefix(a, "-"):
 			if count++; count > 1 {
-				return "", false, fmt.Errorf("too many arguments: %q\n\n%s", a, usage)
+				return "", false, false, fmt.Errorf("too many arguments: %q\n\n%s", a, usage)
 			}
 			arg = a
 		case a == "--":
 			positional = true
+		case a == "-n" || a == "--no-browser":
+			noBrowser = true
 		default:
-			return "", false, fmt.Errorf("unknown option %q\n\n%s", a, usage)
+			return "", false, false, fmt.Errorf("unknown option %q\n\n%s", a, usage)
 		}
 	}
-	return arg, false, nil
+	return arg, noBrowser, false, nil
 }
