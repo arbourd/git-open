@@ -18,20 +18,21 @@ Always add `-n` when running `git open`, `git-open` or `./git-open`; without it,
 ## Layout
 
 ```
-main.go               CLI entry point — processArgs (flags, usage), Version (set by goreleaser ldflags)
-main_test.go          unit test for processArgs (help/version, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
-man/git-open.1        Man page; shipped in release archives
-.goreleaser.yml       Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
-.golangci.yml         golangci-lint config (errcheck excludes `(*os.File).Close`)
+main.go                   CLI entry point — processArgs (flags, usage), Version (set by goreleaser ldflags)
+main_test.go              unit test for processArgs (help/version, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
+man/git-open.1            Man page; shipped in release archives
+skills/git-open/SKILL.md  Agent skill; update whenever the CLI's flags, output, or behavior change
+.goreleaser.yml           Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
+.golangci.yml             golangci-lint config (errcheck excludes `(*os.File).Close`)
 .github/workflows/ci.yml  test, lint, vulncheck; snapshot on branches; release on `v*` tags
 open/
-  open.go             GetURL, InBrowser, path/type/repo parsing
-  provider.go         Provider struct, defaultProviders, Providers/fromConfig, line-format parsing (parseRawLineFormat, validateLineFormat)
-  open_test.go        integration tests
-  provider_test.go    unit + integration tests for provider loading
+  open.go                 GetURL, InBrowser, path/type/repo parsing
+  provider.go             Provider struct, defaultProviders, Providers/fromConfig, line-format parsing (parseRawLineFormat, validateLineFormat)
+  open_test.go            integration tests
+  provider_test.go        unit + integration tests for provider loading
 gitw/
-  gitw.go             thin git wrappers: Toplevel, AbsoluteGitDir, RemoteURL, CurrentRef, ConfigGetRegexp
-  gitw_test.go        unit tests for gitw
+  gitw.go                 thin git wrappers: Toplevel, AbsoluteGitDir, RemoteURL, CurrentRef, ConfigGetRegexp
+  gitw_test.go            unit tests for gitw
 ```
 
 ## Data flow
@@ -53,7 +54,7 @@ main() → processArgs → GetURL(arg) → parseType → parsePath (→ stripLin
 
 `processArgs` handles them; `--` makes later args positional.
 
-- Any new flag needs cases in `TestProcessArgs`; update the `usage` const and `man/git-open.1` together.
+- Any new flag needs cases in `TestProcessArgs`; update the `usage` const, `man/git-open.1`, `README.md`, and `skills/git-open/SKILL.md` together.
 - `-n`/`--no-browser` (before or after the path) never opens the browser: it prints only the URL to stdout (a failed write exits 1).
 - `-h`/`--help` and `-v`/`--version` exit 0 and win over `-n` and other args before `--`. Git intercepts `git open --help` (man page), so `-h` is the in-binary path.
 - Unknown options and extra args print `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`).
