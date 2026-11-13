@@ -112,3 +112,7 @@ fmt.Sprintf(lineformat, startLine)          // one %l
 fmt.Sprintf(lineformat, startLine, endLine) // two %l
 // L42 or L42-L50
 ```
+
+## Agent skill
+
+An [agent skill](skills/git-open/SKILL.md) is available for AI coding agents.
