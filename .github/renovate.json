@@ -2,7 +2,6 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["helpers:pinGitHubActionDigestsToSemver"],
   "enabledManagers": ["github-actions", "gomod"],
-  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
@@ -22,5 +21,6 @@
       "rangeStrategy": "bump"
     }
   ],
-  "platformAutomerge": false
+  "platformAutomerge": false,
+  "postUpdateOptions": ["gomodTidy"]
 }
