@@ -13,6 +13,8 @@ govulncheck ./...
 actionlint            # lint .github/workflows; run after changing anything there (local only; not run in CI)
 ```
 
+After changing `.github/renovate.json`, validate it: `npx --yes --package renovate -- renovate-config-validator --strict`.
+
 Always add `-n` when running `git open`, `git-open` or `./git-open`; without it, it launches a real browser. Only run it without `-n` when deliberately testing the browser launch, and ask first.
 
 ## Layout
