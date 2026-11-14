@@ -15,6 +15,15 @@ If the argument is missing, outside the repository, or not found, the
 repository root is opened.
 .SH OPTIONS
 .TP
+.BR \-r ", " \-\-ref " " \fIref\fR
+Open at a branch, tag, or commit instead of the current branch. Applies to the
+repository root, files, and folders, and a path missing from disk is kept; it
+cannot be combined with a
+.I commit
+argument. The
+.BI \-\-ref= ref
+form is also accepted.
+.TP
 .BR \-n ", " \-\-no\-browser
 Print the URL to standard output instead of opening it in the browser.
 .TP
@@ -68,6 +77,7 @@ $ git open main.go
 $ git open main.go:42\-50
 $ git open 7605d91
 $ git open main.go \-n
+$ git open main.go \-\-ref v1.0.0
 $ git \-C ~/src/my\-repo open
 $ git open \-\- \-odd\-file\-name
 .EE

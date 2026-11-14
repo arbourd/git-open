@@ -116,6 +116,50 @@ func TestProcessArgs(t *testing.T) {
 			args: []string{"--", "--help"},
 			want: options{arg: "--help"},
 		},
+		"ref short": {
+			args: []string{"-r", "v1.0.0", "LICENSE"},
+			want: options{arg: "LICENSE", ref: "v1.0.0"},
+		},
+		"ref long after path": {
+			args: []string{"LICENSE", "--ref", "main"},
+			want: options{arg: "LICENSE", ref: "main"},
+		},
+		"ref equals": {
+			args: []string{"--ref=feature/x"},
+			want: options{ref: "feature/x"},
+		},
+		"ref with no-browser": {
+			args: []string{"-n", "--ref", "main"},
+			want: options{ref: "main", noBrowser: true},
+		},
+		"ref missing value": {
+			args:    []string{"--ref"},
+			wantErr: `option "--ref" requires a value`,
+		},
+		"ref empty value": {
+			args:    []string{"--ref="},
+			wantErr: `option "--ref" requires a value`,
+		},
+		"ref empty argument": {
+			args:    []string{"-r", ""},
+			wantErr: `option "-r" requires a value`,
+		},
+		"ref value that is a flag": {
+			args:    []string{"-r", "-n", "LICENSE"},
+			wantErr: `option "-r" requires a value`,
+		},
+		"ref value that is double dash": {
+			args:    []string{"-r", "--", "LICENSE"},
+			wantErr: `option "-r" requires a value`,
+		},
+		"ref value is not positional": {
+			args:    []string{"-r", "main", "a", "b"},
+			wantErr: "too many arguments",
+		},
+		"ref after double dash is a path": {
+			args: []string{"--", "-r"},
+			want: options{arg: "-r"},
+		},
 		"double dash alone": {
 			args: []string{"--"},
 		},

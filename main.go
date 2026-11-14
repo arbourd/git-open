@@ -21,6 +21,7 @@ Arguments:
                Files accept a :line or :start-end suffix
 
 Options:
+  -r, --ref <ref>   Open at a branch, tag, or commit instead of the current branch
   -n, --no-browser  Print the URL instead of opening it
   -h, --help        Show this help message
   -v, --version     Show version`
@@ -35,7 +36,7 @@ func main() {
 		return
 	}
 
-	url, err := open.GetURL(opts.arg)
+	url, err := open.GetURL(opts.arg, opts.ref)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
@@ -59,6 +60,7 @@ func main() {
 
 type options struct {
 	arg       string
+	ref       string
 	noBrowser bool
 	done      bool // help or version was requested
 }
@@ -83,7 +85,8 @@ func processArgs(args []string, stdout io.Writer) (options, error) {
 	var opts options
 	positional := false
 	count := 0
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
 		case positional || !strings.HasPrefix(a, "-"):
 			if count++; count > 1 {
@@ -92,6 +95,17 @@ func processArgs(args []string, stdout io.Writer) (options, error) {
 			opts.arg = a
 		case a == "--":
 			positional = true
+		case a == "-r" || a == "--ref" || strings.HasPrefix(a, "--ref="):
+			name, value, hasValue := strings.Cut(a, "=")
+			if !hasValue && i+1 < len(args) {
+				i++
+				value = args[i]
+			}
+			// Git refs can't be empty or start with "-", so a flag here means the value is missing
+			if value == "" || strings.HasPrefix(value, "-") {
+				return options{}, fmt.Errorf("option %q requires a value\n\n%s", name, usage)
+			}
+			opts.ref = value
 		case a == "-n" || a == "--no-browser":
 			opts.noBrowser = true
 		default:

@@ -13,6 +13,7 @@ Add `-n` (`--no-browser`), before or after the path, to print only the URL to st
 git open -n                  # repository root
 git open -n main.go          # file or folder
 git open -n 7605d91          # commit (lowercase hex SHA, 7-64 chars)
+git open -n -r v1.0.0        # root at a branch or tag (`-r <ref>` combines with a path; `--ref=v1.0.0` works)
 git open -n main.go:42       # line
 git open -n main.go:42-50    # line range
 git -C ~/src/my-repo open -n # a repo other than the current directory
@@ -26,10 +27,10 @@ Use `git open -h` for usage (git intercepts `git open --help`) and `-v`/`--versi
 
 ## Behavior to know
 
-- URLs use the current branch (the full SHA when HEAD is detached), so they aren't permalinks and 404 if the branch isn't pushed. For a stable link, pass a commit SHA.
-- A missing path, a path outside the repo, a path under a file, or `.` yields the current branch's tree URL (on GitHub `.../tree/<branch>`; other providers use a different prefix), not the repo root URL. Check the printed URL if the target matters.
+- URLs use the current branch (the full SHA when HEAD is detached), so they aren't permalinks and 404 if the branch isn't pushed. For a stable link, pass a commit SHA, or `-r <ref>` to pick the ref for a path or the root. The ref is used literally (`origin/main` 404s) and isn't checked to exist.
+- A missing path, a path outside the repo, a path under a file, or `.` yields the current branch's tree URL (on GitHub `.../tree/<branch>`; other providers use a different prefix), not the repo root URL. Check the printed URL if the target matters. With `-r` a missing path is kept instead (it may exist at that ref), and `-r` can't be combined with a commit.
 - `:line` is dropped for directories, and ignored if a file literally named `main.go:42` exists.
-- Only a lowercase hex SHA is a commit, unless a file with that name exists. `HEAD`, branches, tags, and uppercase SHAs aren't supported and silently give the branch URL.
+- Only a lowercase hex SHA is a commit, unless a file with that name exists. `HEAD`, branches, tags, and uppercase SHAs aren't commits and silently give the branch URL; use `-r` to open a branch or tag.
 - Local remotes aren't supported (`local remotes are not supported`), and an unknown host errors with `unable to find provider for: "<host>"`.
 
 ## Self-hosted providers

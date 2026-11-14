@@ -20,8 +20,8 @@ Always add `-n` when running `git open`, `git-open` or `./git-open`; without it,
 ## Layout
 
 ```
-main.go                   CLI entry point — processArgs (flags, usage), Version (set by goreleaser ldflags)
-main_test.go              unit test for processArgs (help/version, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
+main.go                   CLI entry point — processArgs (flags, usage; returns `options`), Version (set by goreleaser ldflags)
+main_test.go              unit test for processArgs (help/version, `-r`/`--ref`, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
 man/git-open.1            Man page; shipped in release archives
 skills/git-open/SKILL.md  Agent skill; update whenever the CLI's flags, output, or behavior change
 .goreleaser.yml           Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
@@ -40,13 +40,14 @@ gitw/
 ## Data flow
 
 ```
-main() → processArgs → GetURL(arg) → parseType → parsePath (→ stripLine) / getRemoteRef → parseRepository → Provider.{Commit,Path,Root}URL + Provider.lineAnchor
+main() → processArgs → GetURL(arg, ref) → parseType → parsePath (→ stripLine) / getRemoteRef → parseRepository → Provider.{Commit,Path,Root}URL + Provider.lineAnchor
 ```
 
 - The repo root is `gitw.Toplevel`, falling back to `gitw.AbsoluteGitDir` (bare repos, worktrees); don't drop the fallback.
 - `getRemoteRef` gets the remote URL + current ref via `gitw`; `parseRepository` delegates host + repo parsing to `git-get`'s `get.ParseURL` (reuse it, don't reimplement).
 - `arg` is `Root` if empty, `Commit` if 7–64 hex chars (unless a file by that name exists), else `Path`.
 - `parsePath` first splits a trailing `:line`/`:start-end` (`stripLine`), only if the literal arg doesn't exist on disk; dropped for directories.
+- A non-empty `--ref` replaces the current ref and skips `CurrentRef`. `Root` becomes `Path` with an empty path (the tree URL), a path missing from disk is kept (`parsePath`'s `mustExist`), and a `Commit` is an error.
 - Missing, outside-repo, or file-ancestor paths (`ancestorIsFile`, unifying POSIX `ENOTDIR` and Windows `ERROR_PATH_NOT_FOUND`) silently fall back to the root URL.
 - Providers match by exact host: `defaultProviders` first, then `fromConfig()` (both via `Providers()`).
 - URL pattern: `{BaseURL}/{repo}[/{CommitPrefix|PathPrefix}/{ref/sha}[/{path}]]`, run through `escapePath` (`url.PathEscape`, unescape `/`, trim trailing `/`).
@@ -57,6 +58,7 @@ main() → processArgs → GetURL(arg) → parseType → parsePath (→ stripLin
 `processArgs` handles them; `--` makes later args positional.
 
 - Any new flag needs cases in `TestProcessArgs`; update the `usage` const, `man/git-open.1`, `README.md`, and `skills/git-open/SKILL.md` together.
+- `-r`/`--ref <ref>` (also `--ref=<ref>`) takes a value; an empty value, or one starting with `-`, is a missing-value error.
 - `-n`/`--no-browser` (before or after the path) never opens the browser: it prints only the URL to stdout (a failed write exits 1).
 - `-h`/`--help` and `-v`/`--version` exit 0 and win over `-n` and other args before `--`. Git intercepts `git open --help` (man page), so `-h` is the in-binary path.
 - Unknown options and extra args print `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`).
