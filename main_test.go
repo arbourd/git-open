@@ -9,49 +9,44 @@ import (
 func TestProcessArgs(t *testing.T) {
 	cases := map[string]struct {
 		args        []string
-		expectedArg string
+		want        options
 		expectedOut string
-		noBrowser   bool
-		wantDone    bool
 		wantErr     string
 	}{
 		"no argument": {
 			args: []string{},
 		},
 		"one argument": {
-			args:        []string{"LICENSE"},
-			expectedArg: "LICENSE",
+			args: []string{"LICENSE"},
+			want: options{arg: "LICENSE"},
 		},
 		"two arguments": {
 			args:    []string{"LICENSE", "README.md"},
 			wantErr: "too many arguments",
 		},
 		"no-browser short": {
-			args:      []string{"-n"},
-			noBrowser: true,
+			args: []string{"-n"},
+			want: options{noBrowser: true},
 		},
 		"no-browser long after path": {
-			args:        []string{"LICENSE", "--no-browser"},
-			expectedArg: "LICENSE",
-			noBrowser:   true,
+			args: []string{"LICENSE", "--no-browser"},
+			want: options{arg: "LICENSE", noBrowser: true},
 		},
 		"no-browser before path": {
-			args:        []string{"-n", "LICENSE"},
-			expectedArg: "LICENSE",
-			noBrowser:   true,
+			args: []string{"-n", "LICENSE"},
+			want: options{arg: "LICENSE", noBrowser: true},
 		},
 		"no-browser repeated": {
-			args:      []string{"-n", "--no-browser"},
-			noBrowser: true,
+			args: []string{"-n", "--no-browser"},
+			want: options{noBrowser: true},
 		},
 		"double dash makes no-browser a path": {
-			args:        []string{"--", "-n"},
-			expectedArg: "-n",
+			args: []string{"--", "-n"},
+			want: options{arg: "-n"},
 		},
 		"no-browser then double dash then path": {
-			args:        []string{"-n", "--", "--no-browser"},
-			expectedArg: "--no-browser",
-			noBrowser:   true,
+			args: []string{"-n", "--", "--no-browser"},
+			want: options{arg: "--no-browser", noBrowser: true},
 		},
 		"no-browser after double dash is an extra argument": {
 			args:    []string{"--", "LICENSE", "-n"},
@@ -60,12 +55,12 @@ func TestProcessArgs(t *testing.T) {
 		"no-browser with help": {
 			args:        []string{"-n", "--help"},
 			expectedOut: "Usage: git-open",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"no-browser with version": {
 			args:        []string{"--no-browser", "-v"},
 			expectedOut: "git-open dev\n",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"no-browser with unknown option": {
 			args:    []string{"-n", "--foo"},
@@ -78,22 +73,22 @@ func TestProcessArgs(t *testing.T) {
 		"help": {
 			args:        []string{"--help"},
 			expectedOut: "Usage: git-open",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"short help after path": {
 			args:        []string{"LICENSE", "-h"},
 			expectedOut: "Usage: git-open",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"version": {
 			args:        []string{"--version"},
 			expectedOut: "git-open dev\n",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"short version": {
 			args:        []string{"-v"},
 			expectedOut: "git-open dev\n",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"unknown option": {
 			args:    []string{"--foo"},
@@ -104,22 +99,22 @@ func TestProcessArgs(t *testing.T) {
 			wantErr: `unknown option "-x"`,
 		},
 		"double dash makes path positional": {
-			args:        []string{"--", "-v"},
-			expectedArg: "-v",
+			args: []string{"--", "-v"},
+			want: options{arg: "-v"},
 		},
 		"help wins over unknown option": {
 			args:        []string{"--foo", "--help"},
 			expectedOut: "Usage: git-open",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"version wins over too many arguments": {
 			args:        []string{"a", "b", "-v"},
 			expectedOut: "git-open dev\n",
-			wantDone:    true,
+			want:        options{done: true},
 		},
 		"help after double dash is a path": {
-			args:        []string{"--", "--help"},
-			expectedArg: "--help",
+			args: []string{"--", "--help"},
+			want: options{arg: "--help"},
 		},
 		"double dash alone": {
 			args: []string{"--"},
@@ -133,7 +128,7 @@ func TestProcessArgs(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer
-			arg, noBrowser, done, err := processArgs(c.args, &out)
+			opts, err := processArgs(c.args, &out)
 
 			if c.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
@@ -147,14 +142,11 @@ func TestProcessArgs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
 			}
-			if arg != c.expectedArg {
-				t.Fatalf("unexpected arg:\n\t(GOT): %#v\n\t(WNT): %#v", arg, c.expectedArg)
+			if opts != c.want {
+				t.Fatalf("unexpected options:\n\t(GOT): %#v\n\t(WNT): %#v", opts, c.want)
 			}
-			if noBrowser != c.noBrowser {
-				t.Fatalf("unexpected noBrowser:\n\t(GOT): %v\n\t(WNT): %v", noBrowser, c.noBrowser)
-			}
-			if done != c.wantDone {
-				t.Fatalf("unexpected done:\n\t(GOT): %v\n\t(WNT): %v", done, c.wantDone)
+			if c.expectedOut == "" && out.Len() != 0 {
+				t.Fatalf("unexpected output:\n\t(GOT): %q\n\t(WNT): none", out.String())
 			}
 			if !strings.Contains(out.String(), c.expectedOut) {
 				t.Fatalf("unexpected output:\n\t(GOT): %q\n\t(WNT): contains %q", out.String(), c.expectedOut)
