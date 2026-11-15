@@ -1,6 +1,7 @@
 package gitw
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/ldez/go-git-cmd-wrapper/v2/config"
@@ -40,11 +41,25 @@ func Toplevel(path string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// RemoteURL returns the URL of the remote,
+// RemoteURL returns the URL of the named remote, or of the default remote when remote is empty,
 // with the Git directory specified by path
 //
 // git -C path ls-remote --get-url
-func RemoteURL(path string) (string, error) {
+// git -C path remote get-url -- remote
+func RemoteURL(path, remote string) (string, error) {
+	if remote != "" {
+		// Unlike ls-remote, get-url fails for a name that isn't a configured remote.
+		out, err := git.Raw("remote", cwd(path), func(g *types.Cmd) {
+			g.AddOptions("get-url")
+			g.AddOptions("--")
+			g.AddOptions(remote)
+		})
+		if err != nil {
+			return "", fmt.Errorf("no such remote: %q", remote)
+		}
+		return strings.TrimSpace(out), nil
+	}
+
 	out, err := git.Raw("ls-remote", cwd(path), func(g *types.Cmd) {
 		g.AddOptions("--get-url")
 	})

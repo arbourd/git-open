@@ -24,6 +24,12 @@ argument. The
 .BI \-\-ref= ref
 form is also accepted.
 .TP
+.BR \-R ", " \-\-remote " " \fIname\fR
+Build the URL from the named remote instead of the default remote. The
+.BI \-\-remote= name
+form is also accepted. An unknown remote is an error. Combines with
+.BR \-\-ref .
+.TP
 .BR \-n ", " \-\-no\-browser
 Print the URL to standard output instead of opening it in the browser.
 .TP
@@ -78,6 +84,7 @@ $ git open main.go:42\-50
 $ git open 7605d91
 $ git open main.go \-n
 $ git open main.go \-\-ref v1.0.0
+$ git open main.go \-R fork
 $ git \-C ~/src/my\-repo open
 $ git open \-\- \-odd\-file\-name
 .EE

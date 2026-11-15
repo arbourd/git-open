@@ -48,7 +48,8 @@ func InBrowser(url string) error {
 
 // GetURL returns the URL to open based on the arg provided.
 // A non-empty ref (branch, tag, commit) replaces the current ref for paths and the root.
-func GetURL(arg, ref string) (string, error) {
+// A non-empty remote names the Git remote to build the URL from, instead of the default remote.
+func GetURL(arg, ref, remote string) (string, error) {
 	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
 		// If toplevel fails, we might be in a bare repo
@@ -78,12 +79,12 @@ func GetURL(arg, ref string) (string, error) {
 		arg, lstart, lend, _ = parsePath(arg, gitroot, !override)
 	}
 
-	remote, ref, err := getRemoteRef(gitroot, ref)
+	remoteURL, ref, err := getRemoteRef(gitroot, ref, remote)
 	if err != nil {
 		return "", err
 	}
 
-	host, repo, err := parseRepository(remote)
+	host, repo, err := parseRepository(remoteURL)
 	if err != nil {
 		return "", err
 	}
@@ -194,16 +195,16 @@ func ancestorIsFile(path string) bool {
 	}
 }
 
-// getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository.
+// getRemoteRef returns the URL of the named remote (default when empty) and reference (branch, tag, commit), for a provided Git repository.
 // A non-empty ref is returned as is, otherwise the current ref is used.
-func getRemoteRef(gitroot, ref string) (string, string, error) {
-	remote, err := gitw.RemoteURL(gitroot)
+func getRemoteRef(gitroot, ref, remote string) (string, string, error) {
+	remoteURL, err := gitw.RemoteURL(gitroot, remote)
 	if err != nil || ref != "" {
-		return remote, ref, err
+		return remoteURL, ref, err
 	}
 
 	ref, err = gitw.CurrentRef(gitroot)
-	return remote, ref, err
+	return remoteURL, ref, err
 }
 
 // scpRegex matches SCP-like remotes, e.g. git@github.com:owner/repo.git (user optional)

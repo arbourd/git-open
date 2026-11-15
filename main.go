@@ -21,10 +21,11 @@ Arguments:
                Files accept a :line or :start-end suffix
 
 Options:
-  -r, --ref <ref>   Open at a branch, tag, or commit instead of the current branch
-  -n, --no-browser  Print the URL instead of opening it
-  -h, --help        Show this help message
-  -v, --version     Show version`
+  -r, --ref <ref>      Open at a branch, tag, or commit instead of the current branch
+  -R, --remote <name>  Use the named remote instead of the default
+  -n, --no-browser     Print the URL instead of opening it
+  -h, --help           Show this help message
+  -v, --version        Show version`
 
 func main() {
 	opts, err := processArgs(os.Args[1:], os.Stdout)
@@ -36,7 +37,7 @@ func main() {
 		return
 	}
 
-	url, err := open.GetURL(opts.arg, opts.ref)
+	url, err := open.GetURL(opts.arg, opts.ref, opts.remote)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
@@ -61,6 +62,7 @@ func main() {
 type options struct {
 	arg       string
 	ref       string
+	remote    string
 	noBrowser bool
 	done      bool // help or version was requested
 }
@@ -68,11 +70,17 @@ type options struct {
 // processArgs parses args, printing help or the version to stdout if asked.
 // Help and version win wherever they appear before "--", which makes later arguments positional.
 func processArgs(args []string, stdout io.Writer) (options, error) {
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if a == "--" {
 			break
 		}
 		switch a {
+		case "-r", "--ref", "-R", "--remote":
+			// The value is not a flag, unless it is "--": that is a missing value, reported below.
+			if i+1 < len(args) && args[i+1] != "--" {
+				i++
+			}
 		case "-h", "--help":
 			_, err := fmt.Fprintln(stdout, usage)
 			return options{done: true}, err
@@ -83,6 +91,7 @@ func processArgs(args []string, stdout io.Writer) (options, error) {
 	}
 
 	var opts options
+	var err error
 	positional := false
 	count := 0
 	for i := 0; i < len(args); i++ {
@@ -96,16 +105,13 @@ func processArgs(args []string, stdout io.Writer) (options, error) {
 		case a == "--":
 			positional = true
 		case a == "-r" || a == "--ref" || strings.HasPrefix(a, "--ref="):
-			name, value, hasValue := strings.Cut(a, "=")
-			if !hasValue && i+1 < len(args) {
-				i++
-				value = args[i]
+			if opts.ref, err = optionValue(args, &i); err != nil {
+				return options{}, err
 			}
-			// Git refs can't be empty or start with "-", so a flag here means the value is missing
-			if value == "" || strings.HasPrefix(value, "-") {
-				return options{}, fmt.Errorf("option %q requires a value\n\n%s", name, usage)
+		case a == "-R" || a == "--remote" || strings.HasPrefix(a, "--remote="):
+			if opts.remote, err = optionValue(args, &i); err != nil {
+				return options{}, err
 			}
-			opts.ref = value
 		case a == "-n" || a == "--no-browser":
 			opts.noBrowser = true
 		default:
@@ -113,4 +119,19 @@ func processArgs(args []string, stdout io.Writer) (options, error) {
 		}
 	}
 	return opts, nil
+}
+
+// optionValue returns the value of the option at args[*i], from "--name=value" or the next argument (advancing *i).
+// An empty value, or one starting with "-", means the value is missing: it is almost certainly the next flag.
+// This also rules out the rare remote name that starts with "-".
+func optionValue(args []string, i *int) (string, error) {
+	name, value, hasValue := strings.Cut(args[*i], "=")
+	if !hasValue && *i+1 < len(args) {
+		*i++
+		value = args[*i]
+	}
+	if value == "" || strings.HasPrefix(value, "-") {
+		return "", fmt.Errorf("option %q requires a value\n\n%s", name, usage)
+	}
+	return value, nil
 }
