@@ -1,6 +1,7 @@
 package open
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/arbourd/git-get/get"
 	"github.com/arbourd/git-open/gitw"
 )
 
@@ -206,15 +206,36 @@ func getRemoteRef(gitroot, ref string) (string, string, error) {
 	return remote, ref, err
 }
 
+// scpRegex matches SCP-like remotes, e.g. git@github.com:owner/repo.git (user optional)
+var scpRegex = regexp.MustCompile(`^(?:([^@/:\s]+)@)?([\w.-]+):(.*)$`)
+
 // parseRepository parses the host and repository (username or organization and repository name) from a remote string
 func parseRepository(remote string) (host string, repo string, err error) {
-	url, err := get.ParseURL(remote)
+	// Absolute paths (including Windows drive paths, which url.Parse reads as a scheme) are local.
+	if filepath.IsAbs(remote) {
+		return "", cleanRepo(filepath.ToSlash(remote)), nil
+	}
+
+	// SCP-like syntax: git@host:owner/repo. Without a user, the path must look like
+	// owner/repo, so URLs ("://"), "user:pw@host:..." and "mailto:x" fall through.
+	if m := scpRegex.FindStringSubmatch(remote); m != nil &&
+		(m[1] != "" || (strings.Contains(m[3], "/") && !strings.HasPrefix(m[3], "//") && !strings.Contains(m[3], "@"))) {
+		return m[2], cleanRepo(m[3]), nil
+	}
+
+	u, err := url.Parse(remote)
 	if err != nil {
 		return "", "", fmt.Errorf("unable to parse remote url: %w", err)
 	}
+	if u.Opaque != "" {
+		return "", "", errors.New("unable to parse remote url: unsupported format")
+	}
+	return u.Host, cleanRepo(u.Path), nil
+}
 
-	repo = strings.TrimPrefix(strings.TrimSuffix(path.Clean(url.Path), ".git"), "/")
-	return url.Host, repo, nil
+// cleanRepo normalizes a remote path to owner/repo form
+func cleanRepo(p string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(path.Clean(p), ".git"), "/")
 }
 
 // lineSuffixRegex matches trailing line numbers

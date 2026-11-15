@@ -327,12 +327,13 @@ func TestGetURLWindowsAbsolutePath(t *testing.T) {
 }
 
 func TestParseRepository(t *testing.T) {
-	cases := map[string]struct {
+	type testCase struct {
 		remote       string
 		expectedHost string
 		expectedPath string
 		wantErr      bool
-	}{
+	}
+	cases := map[string]testCase{
 		"https protocol": {
 			remote:       "https://github.com/arbourd/git-open",
 			expectedHost: "github.com",
@@ -372,6 +373,47 @@ func TestParseRepository(t *testing.T) {
 			expectedHost: "",
 			expectedPath: "../repo",
 		},
+		"ssh url with port": {
+			remote:       "ssh://git@example.com:2222/owner/repo.git",
+			expectedHost: "example.com:2222",
+			expectedPath: "owner/repo",
+		},
+		"scp without .git suffix": {
+			remote:       "git@github.com:arbourd/git-open",
+			expectedHost: "github.com",
+			expectedPath: "arbourd/git-open",
+		},
+		"scp hyphenated user": {
+			remote:       "my-user@git.example.com:owner/repo.git",
+			expectedHost: "git.example.com",
+			expectedPath: "owner/repo",
+		},
+		"scp dotted user": {
+			remote:       "git.svc@example.com:owner/repo",
+			expectedHost: "example.com",
+			expectedPath: "owner/repo",
+		},
+		"scp without user": {
+			remote:       "github.com:owner/repo.git",
+			expectedHost: "github.com",
+			expectedPath: "owner/repo",
+		},
+		"local absolute path with .git suffix": {
+			remote:       "/srv/repo.git",
+			expectedHost: "",
+			expectedPath: "srv/repo",
+		},
+		"opaque url": {
+			remote:  "user:pw@host:owner/repo",
+			wantErr: true,
+		},
+	}
+	if runtime.GOOS == "windows" {
+		cases["windows drive path"] = testCase{
+			remote:       `C:\Users\dylan\repo`,
+			expectedHost: "",
+			expectedPath: "C:/Users/dylan/repo",
+		}
 	}
 
 	for name, c := range cases {
