@@ -445,6 +445,33 @@ func TestParseRepository(t *testing.T) {
 			remote:  "user:pw@host:owner/repo",
 			wantErr: true,
 		},
+		"opaque mailto": {
+			remote:  "mailto:x",
+			wantErr: true,
+		},
+		"scp without user or slash is opaque": {
+			remote:  "host:repo",
+			wantErr: true,
+		},
+		"scp ipv6 host is unsupported": {
+			remote:  "git@[::1]:owner/repo",
+			wantErr: true,
+		},
+		"scp with leading slash path": {
+			remote:       "git@host:/owner/repo.git",
+			expectedHost: "host",
+			expectedPath: "owner/repo",
+		},
+		"file url with host": {
+			remote:       "file://host/owner/repo.git",
+			expectedHost: "host",
+			expectedPath: "owner/repo",
+		},
+		"https url with userinfo falls through scp": {
+			remote:       "https://user:pw@host/owner/repo",
+			expectedHost: "host",
+			expectedPath: "owner/repo",
+		},
 	}
 	if runtime.GOOS == "windows" {
 		cases["windows drive path"] = testCase{
