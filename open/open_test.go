@@ -28,9 +28,34 @@ func TestGetURL(t *testing.T) {
 	cases := map[string]struct {
 		gitdir      string
 		arg         string
+		ref         string
 		expectedURL string
 		wantErr     bool
 	}{
+		"ref with no argument": {
+			ref:         "v1.0.0",
+			expectedURL: "https://github.com/arbourd/git-open/tree/v1.0.0",
+		},
+		"ref with file": {
+			arg:         "open_test.go:3",
+			ref:         "feature/x",
+			expectedURL: "https://github.com/arbourd/git-open/tree/feature/x/open/open_test.go#L3",
+		},
+		"ref with path missing from disk keeps the path": {
+			arg:         "nope.txt:7",
+			ref:         "v1.0.0",
+			expectedURL: "https://github.com/arbourd/git-open/tree/v1.0.0/open/nope.txt#L7",
+		},
+		"ref with path outside the repo falls back to ref root": {
+			arg:         filepath.FromSlash("../../../.."),
+			ref:         "v1.0.0",
+			expectedURL: "https://github.com/arbourd/git-open/tree/v1.0.0",
+		},
+		"ref with hex-named file is a path": {
+			arg:         "abcdef1",
+			ref:         "v1.0.0",
+			expectedURL: "https://github.com/arbourd/git-open/tree/v1.0.0/open/abcdef1",
+		},
 		"no argument": {
 			arg:         "",
 			expectedURL: "https://github.com/arbourd/git-open",
@@ -109,7 +134,7 @@ func TestGetURL(t *testing.T) {
 				expectedURL = fmt.Sprintf(c.expectedURL, ref)
 			}
 
-			url, err := GetURL(c.arg)
+			url, err := GetURL(c.arg, c.ref)
 			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
 			} else if err == nil && c.wantErr {
@@ -118,6 +143,13 @@ func TestGetURL(t *testing.T) {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
 			}
 		})
+	}
+}
+
+func TestGetURLRefWithCommit(t *testing.T) {
+	_, err := GetURL("7605d91", "v1.0.0")
+	if err == nil || err.Error() != "a ref cannot be combined with a commit" {
+		t.Fatalf("unexpected error:\n\t(GOT): %v\n\t(WNT): a ref cannot be combined with a commit", err)
 	}
 }
 
@@ -167,7 +199,7 @@ func TestGetURLErrors(t *testing.T) {
 			c.setup(t, dir)
 			t.Chdir(dir)
 
-			_, err := GetURL("")
+			_, err := GetURL("", "")
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -201,7 +233,7 @@ func TestGetURLBareRepo(t *testing.T) {
 
 	t.Chdir(bareDir)
 
-	url, err := GetURL("")
+	url, err := GetURL("", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -257,7 +289,7 @@ func TestGetURLWorktree(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			url, err := GetURL(c.arg)
+			url, err := GetURL(c.arg, "")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -283,7 +315,7 @@ func TestGetURLWindowsAbsolutePath(t *testing.T) {
 		t.Fatalf("unable to get absolute path: %v", err)
 	}
 
-	url, err := GetURL(abs + ":3-10")
+	url, err := GetURL(abs+":3-10", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -525,6 +557,23 @@ func TestStripLine(t *testing.T) {
 	}
 }
 
+func TestParsePathMissingUnderSymlink(t *testing.T) {
+	root := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(root, link); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	gitroot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	path, _, _, err := parsePath(filepath.Join(link, "gone.go"), gitroot, false)
+	if err != nil || path != "gone.go" {
+		t.Fatalf("unexpected result:\n\t(GOT): path=%#v err=%v\n\t(WNT): path=%#v err=nil", path, err, "gone.go")
+	}
+}
+
 func TestParsePath(t *testing.T) {
 	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
@@ -536,6 +585,7 @@ func TestParsePath(t *testing.T) {
 		expectedPath  string
 		expectedStart int
 		expectedEnd   int
+		keepMissing   bool
 		wantErr       bool
 	}{
 		"empty argument": {
@@ -573,6 +623,18 @@ func TestParsePath(t *testing.T) {
 			expectedPath: "",
 			wantErr:      true,
 		},
+		"file does not exist is kept when it may exist at a ref": {
+			path:          "gone.go:3",
+			expectedPath:  "open/gone.go",
+			expectedStart: 3,
+			keepMissing:   true,
+		},
+		"out of git root with missing path still errors": {
+			path:         filepath.FromSlash("../../../../gone.go"),
+			expectedPath: "",
+			keepMissing:  true,
+			wantErr:      true,
+		},
 		"path walks through a file": {
 			path:         filepath.FromSlash("open_test.go/foo"),
 			expectedPath: "",
@@ -590,7 +652,7 @@ func TestParsePath(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, start, end, err := parsePath(c.path, gitroot)
+			path, start, end, err := parsePath(c.path, gitroot, !c.keepMissing)
 			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
 			} else if err == nil && c.wantErr {

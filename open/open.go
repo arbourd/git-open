@@ -46,8 +46,9 @@ func InBrowser(url string) error {
 	return cmd.Start()
 }
 
-// GetURL returns the URL to open based on the arg provided
-func GetURL(arg string) (string, error) {
+// GetURL returns the URL to open based on the arg provided.
+// A non-empty ref (branch, tag, commit) replaces the current ref for paths and the root.
+func GetURL(arg, ref string) (string, error) {
 	gitroot, err := gitw.Toplevel(".")
 	if err != nil {
 		// If toplevel fails, we might be in a bare repo
@@ -63,13 +64,21 @@ func GetURL(arg string) (string, error) {
 			t = Path
 		}
 	}
+	override := ref != ""
+	if override {
+		if t == Commit {
+			return "", fmt.Errorf("a ref cannot be combined with a commit")
+		}
+		// The root at a ref is the path URL with an empty path
+		t = Path
+	}
 	var lstart, lend int
 	if t == Path {
 		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL
-		arg, lstart, lend, _ = parsePath(arg, gitroot)
+		arg, lstart, lend, _ = parsePath(arg, gitroot, !override)
 	}
 
-	remote, ref, err := getRemoteRef(gitroot)
+	remote, ref, err := getRemoteRef(gitroot, ref)
 	if err != nil {
 		return "", err
 	}
@@ -114,8 +123,9 @@ func GetURL(arg string) (string, error) {
 	return openURL, nil
 }
 
-// parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers
-func parsePath(path, gitroot string) (string, int, int, error) {
+// parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers.
+// A path missing from disk is an error if mustExist, otherwise it is kept, as it may exist at another ref.
+func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
 	if path == "" {
 		return "", 0, 0, nil
 	}
@@ -131,7 +141,7 @@ func parsePath(path, gitroot string) (string, int, int, error) {
 	path = filepath.Clean(path)
 
 	info, err := os.Stat(path)
-	if err != nil && (os.IsNotExist(err) || ancestorIsFile(path)) {
+	if err != nil && mustExist && (os.IsNotExist(err) || ancestorIsFile(path)) {
 		return "", 0, 0, err
 	}
 	if err == nil && info.IsDir() {
@@ -139,9 +149,7 @@ func parsePath(path, gitroot string) (string, int, int, error) {
 	}
 
 	path, _ = filepath.Abs(path)
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		path = resolved
-	}
+	path = resolveSymlinks(path)
 
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)
@@ -155,6 +163,18 @@ func parsePath(path, gitroot string) (string, int, int, error) {
 
 	// Convert all path separators to `/` and trim trailing `/`
 	return filepath.ToSlash(rel), lstart, lend, nil
+}
+
+// resolveSymlinks resolves symlinks in path, or in its deepest existing ancestor if path is missing
+func resolveSymlinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	dir := filepath.Dir(path)
+	if dir == path {
+		return path
+	}
+	return filepath.Join(resolveSymlinks(dir), filepath.Base(path))
 }
 
 // ancestorIsFile reports whether path is invalid directory because an ancestor
@@ -174,11 +194,12 @@ func ancestorIsFile(path string) bool {
 	}
 }
 
-// getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository
-func getRemoteRef(gitroot string) (remote string, ref string, err error) {
-	remote, err = gitw.RemoteURL(gitroot)
-	if err != nil {
-		return "", "", err
+// getRemoteRef returns the Git remote and reference (branch, tag, commit), for a provided Git repository.
+// A non-empty ref is returned as is, otherwise the current ref is used.
+func getRemoteRef(gitroot, ref string) (string, string, error) {
+	remote, err := gitw.RemoteURL(gitroot)
+	if err != nil || ref != "" {
+		return remote, ref, err
 	}
 
 	ref, err = gitw.CurrentRef(gitroot)

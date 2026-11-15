@@ -44,6 +44,7 @@ $ git -C ~/src/my-repo open
 
 | Option                | Description                                  |
 | --------------------- | -------------------------------------------- |
+| `-r`, `--ref <ref>`   | Open at a branch, tag, or commit             |
 | `-n`, `--no-browser`  | Print the URL instead of opening the browser |
 | `-h`, `--help`        | Show usage                                   |
 | `-v`, `--version`     | Show the version                             |
@@ -57,6 +58,13 @@ $ git open main.go -n
 https://github.com/arbourd/git-open/tree/main/main.go
 $ git open --no-browser 7605d91
 https://github.com/arbourd/git-open/commit/7605d91
+```
+
+`--ref` opens a branch, tag, or commit instead of the current branch. `--ref=<ref>` also works. It cannot be combined with a commit argument.
+
+```console
+$ git open main.go --ref v1.0.0
+$ git open --ref v1.0.0
 ```
 
 Use `--` to open a path that starts with a dash.
