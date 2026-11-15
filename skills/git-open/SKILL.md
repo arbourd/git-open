@@ -7,7 +7,7 @@ description: Open a repository, file, commit, or line in the browser with `git o
 
 `git open [options] [path|commit]` opens the current repo's web page in the browser, inferred from the remote. Supports GitHub, GitLab, Bitbucket, and Codeberg out of the box.
 
-Add `-n` (`--no-browser`), before or after the path, to print only the URL to stdout instead of launching a browser. Always use `-n` when running it yourself. Omit it only when the user explicitly asked to open the page, then ask first.
+Add `-n` (`--no-browser`), before or after the path, to print only the URL to stdout instead of launching a browser. Add `-R <name>` (`--remote <name>`) to build the URL from a named remote instead of the default; an unknown remote errors with `no such remote`. Always use `-n` when running it yourself. Omit it only when the user explicitly asked to open the page, then ask first.
 
 ```sh
 git open -n                  # repository root
@@ -16,6 +16,7 @@ git open -n 7605d91          # commit (lowercase hex SHA, 7-64 chars)
 git open -n -r v1.0.0        # root at a branch or tag (`-r <ref>` combines with a path; `--ref=v1.0.0` works)
 git open -n main.go:42       # line
 git open -n main.go:42-50    # line range
+git open -n -R fork main.go  # use remote `fork` (`-R <name>`; `--remote=fork` works)
 git -C ~/src/my-repo open -n # a repo other than the current directory
 git open -n -- -odd-name     # `--` makes later args paths, even if they start with `-`
 

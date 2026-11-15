@@ -37,6 +37,50 @@ func TestConfigGetRegexp(t *testing.T) {
 	}
 }
 
+func TestRemoteURL(t *testing.T) {
+	dir := t.TempDir()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	run("init")
+	run("remote", "add", "origin", "https://example.com/a/origin.git")
+	run("remote", "add", "fork", "https://example.com/b/fork.git")
+
+	cases := map[string]struct {
+		remote  string
+		want    string
+		wantErr bool
+	}{
+		"default":        {remote: "", want: "https://example.com/a/origin.git"},
+		"named":          {remote: "fork", want: "https://example.com/b/fork.git"},
+		"unknown":        {remote: "nope", wantErr: true},
+		"url not a name": {remote: "https://example.com/c/d.git", wantErr: true},
+		"flag-like":      {remote: "--exit-code", wantErr: true},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := RemoteURL(dir, c.remote)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil || got != c.want {
+				t.Fatalf("unexpected result:\n\t(GOT): %q, %v\n\t(WNT): %q", got, err, c.want)
+			}
+		})
+	}
+}
+
 func TestCwd(t *testing.T) {
 	cases := map[string]struct {
 		path         string

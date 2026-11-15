@@ -160,6 +160,58 @@ func TestProcessArgs(t *testing.T) {
 			args: []string{"--", "-r"},
 			want: options{arg: "-r"},
 		},
+		"short remote": {
+			args: []string{"-R", "fork", "LICENSE"},
+			want: options{arg: "LICENSE", remote: "fork"},
+		},
+		"long remote after path": {
+			args: []string{"LICENSE", "--remote", "fork"},
+			want: options{arg: "LICENSE", remote: "fork"},
+		},
+		"long remote with equals": {
+			args: []string{"--remote=fork"},
+			want: options{remote: "fork"},
+		},
+		"remote with ref and no browser": {
+			args: []string{"-n", "-r", "main", "-R", "fork"},
+			want: options{ref: "main", remote: "fork", noBrowser: true},
+		},
+		"remote without value": {
+			args:    []string{"-R"},
+			wantErr: `option "-R" requires a value`,
+		},
+		"remote empty value": {
+			args:    []string{"--remote="},
+			wantErr: `option "--remote" requires a value`,
+		},
+		"remote value is a flag": {
+			args:    []string{"-R", "-n"},
+			wantErr: `option "-R" requires a value`,
+		},
+		"remote value is double dash": {
+			args:    []string{"-R", "--", "x"},
+			wantErr: `option "-R" requires a value`,
+		},
+		"remote value is not help or version": {
+			args:    []string{"-R", "-v"},
+			wantErr: `option "-R" requires a value`,
+		},
+		"remote value is double dash before help": {
+			args:    []string{"-R", "--", "-h"},
+			wantErr: `option "-R" requires a value`,
+		},
+		"ref value is not help or version": {
+			args:    []string{"-r", "-h"},
+			wantErr: `option "-r" requires a value`,
+		},
+		"repeated remote last wins": {
+			args: []string{"-R", "a", "-R", "b"},
+			want: options{remote: "b"},
+		},
+		"remote after double dash is a path": {
+			args: []string{"--", "-R"},
+			want: options{arg: "-R"},
+		},
 		"double dash alone": {
 			args: []string{"--"},
 		},

@@ -134,7 +134,7 @@ func TestGetURL(t *testing.T) {
 				expectedURL = fmt.Sprintf(c.expectedURL, ref)
 			}
 
-			url, err := GetURL(c.arg, c.ref)
+			url, err := GetURL(c.arg, c.ref, "")
 			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
 			} else if err == nil && c.wantErr {
@@ -147,7 +147,7 @@ func TestGetURL(t *testing.T) {
 }
 
 func TestGetURLRefWithCommit(t *testing.T) {
-	_, err := GetURL("7605d91", "v1.0.0")
+	_, err := GetURL("7605d91", "v1.0.0", "")
 	if err == nil || err.Error() != "a ref cannot be combined with a commit" {
 		t.Fatalf("unexpected error:\n\t(GOT): %v\n\t(WNT): a ref cannot be combined with a commit", err)
 	}
@@ -199,7 +199,7 @@ func TestGetURLErrors(t *testing.T) {
 			c.setup(t, dir)
 			t.Chdir(dir)
 
-			_, err := GetURL("", "")
+			_, err := GetURL("", "", "")
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -207,6 +207,44 @@ func TestGetURLErrors(t *testing.T) {
 				t.Fatalf("unexpected error:\n\t(GOT): %q\n\t(WNT): contains %q", err.Error(), c.wantErr)
 			}
 		})
+	}
+}
+
+func TestGetURLRemote(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test"},
+		{"config", "commit.gpgsign", "false"},
+		{"remote", "add", "origin", "https://github.com/example/repo.git"},
+		{"remote", "add", "fork", "https://gitlab.com/someone/repo.git"},
+		{"commit", "--allow-empty", "-m", "init"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	t.Chdir(dir)
+
+	if _, err := GetURL("", "", "nope"); err == nil || !strings.Contains(err.Error(), `no such remote: "nope"`) {
+		t.Fatalf("unexpected error for unknown remote: %v", err)
+	}
+
+	for _, c := range []struct{ ref, remote, want string }{
+		{"", "", "https://github.com/example/repo"},
+		{"", "fork", "https://gitlab.com/someone/repo"},
+		{"v1", "fork", "https://gitlab.com/someone/repo/-/tree/v1"},
+	} {
+		url, err := GetURL("", c.ref, c.remote)
+		if err != nil {
+			t.Fatalf("remote %q: unexpected error: %v", c.remote, err)
+		}
+		if url != c.want {
+			t.Fatalf("remote %q, ref %q:\n\t(GOT): %#v\n\t(WNT): %#v", c.remote, c.ref, url, c.want)
+		}
 	}
 }
 
@@ -233,7 +271,7 @@ func TestGetURLBareRepo(t *testing.T) {
 
 	t.Chdir(bareDir)
 
-	url, err := GetURL("", "")
+	url, err := GetURL("", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -289,7 +327,7 @@ func TestGetURLWorktree(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			url, err := GetURL(c.arg, "")
+			url, err := GetURL(c.arg, "", "")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -315,7 +353,7 @@ func TestGetURLWindowsAbsolutePath(t *testing.T) {
 		t.Fatalf("unable to get absolute path: %v", err)
 	}
 
-	url, err := GetURL(abs+":3-10", "")
+	url, err := GetURL(abs+":3-10", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

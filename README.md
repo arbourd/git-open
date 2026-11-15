@@ -36,19 +36,23 @@ $ git open main.go:42-50
 # Open a commit
 $ git open 7605d91
 
+# Open using a named remote instead of the default remote
+$ git open main.go -R fork
+
 # Open a repository other than the current directory
 $ git -C ~/src/my-repo open
 ```
 
 ### Options
 
-| Option                | Description                                  |
-| --------------------- | -------------------------------------------- |
-| `-r`, `--ref <ref>`   | Open at a branch, tag, or commit             |
-| `-n`, `--no-browser`  | Print the URL instead of opening the browser |
-| `-h`, `--help`        | Show usage                                   |
-| `-v`, `--version`     | Show the version                             |
-| `--`                  | Treat every later argument as a path         |
+| Option                  | Description                                  |
+| ----------------------- | -------------------------------------------- |
+| `-r`, `--ref <ref>`     | Open at a branch, tag, or commit             |
+| `-R`, `--remote <name>` | Use the named remote instead of the default  |
+| `-n`, `--no-browser`    | Print the URL instead of opening the browser |
+| `-h`, `--help`          | Show usage                                   |
+| `-v`, `--version`       | Show the version                             |
+| `--`                    | Treat every later argument as a path         |
 
 `--no-browser` can go before or after the path and prints only the URL, which is
 useful in scripts.
@@ -65,6 +69,13 @@ https://github.com/arbourd/git-open/commit/7605d91
 ```console
 $ git open main.go --ref v1.0.0
 $ git open --ref v1.0.0
+```
+
+`--remote` builds the URL from a named remote instead of the default. `--remote=<name>` also works, an unknown remote is an error, and it combines with `--ref`.
+
+```console
+$ git open main.go --remote fork
+$ git open --ref v1.0.0 --remote upstream
 ```
 
 Use `--` to open a path that starts with a dash.

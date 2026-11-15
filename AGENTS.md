@@ -21,7 +21,7 @@ Always add `-n` when running `git open`, `git-open` or `./git-open`; without it,
 
 ```
 main.go                   CLI entry point — processArgs (flags, usage; returns `options`), Version (set by goreleaser ldflags)
-main_test.go              unit test for processArgs (help/version, `-r`/`--ref`, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
+main_test.go              unit test for processArgs (help/version, `-r`/`--ref`, `-R`/`--remote`, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
 man/git-open.1            Man page; shipped in release archives
 skills/git-open/SKILL.md  Agent skill; update whenever the CLI's flags, output, or behavior change
 .goreleaser.yml           Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
@@ -40,11 +40,11 @@ gitw/
 ## Data flow
 
 ```
-main() → processArgs → GetURL(arg, ref) → parseType → parsePath (→ stripLine) / getRemoteRef → parseRepository → Provider.{Commit,Path,Root}URL + Provider.lineAnchor
+main() → processArgs → GetURL(arg, ref, remote) → parseType → parsePath (→ stripLine) / getRemoteRef → parseRepository → Provider.{Commit,Path,Root}URL + Provider.lineAnchor
 ```
 
 - The repo root is `gitw.Toplevel`, falling back to `gitw.AbsoluteGitDir` (bare repos, worktrees); don't drop the fallback.
-- `getRemoteRef` gets the remote URL + current ref via `gitw`; `parseRepository` parses host + repo itself (SCP syntax, URLs, absolute local paths → empty host).
+- `getRemoteRef` gets the URL of the `-R` remote (default remote when empty) + current ref via `gitw`; `parseRepository` parses host + repo itself (SCP syntax, URLs, absolute local paths → empty host).
 - SCP (`scpRegex`): `user@` is optional. Without a user, the path must contain `/`, not start with `//`, and not contain `@`, so `https://…`, `mailto:x` and `user:pw@host:…` fall through to `url.Parse`; opaque URLs error.
 - `arg` is `Root` if empty, `Commit` if 7–64 hex chars (unless a file by that name exists), else `Path`.
 - `parsePath` first splits a trailing `:line`/`:start-end` (`stripLine`), only if the literal arg doesn't exist on disk; dropped for directories.
@@ -60,6 +60,8 @@ main() → processArgs → GetURL(arg, ref) → parseType → parsePath (→ str
 
 - Any new flag needs cases in `TestProcessArgs`; update the `usage` const, `man/git-open.1`, `README.md`, and `skills/git-open/SKILL.md` together.
 - `-r`/`--ref <ref>` (also `--ref=<ref>`) takes a value; an empty value, or one starting with `-`, is a missing-value error.
+- `-R`/`--remote <name>` (also `--remote=<name>`) takes a value, validated like `--ref`; an unknown remote is a `no such remote` error.
+- Value flags (`-r`, `-R`) share `optionValue` and are listed in the help/version pre-scan, which skips their value. A new value flag must be added to both, or `-x -v` prints the version. `-R -v` and `-R -- -h` are missing-value errors, not help or version.
 - `-n`/`--no-browser` (before or after the path) never opens the browser: it prints only the URL to stdout (a failed write exits 1).
 - `-h`/`--help` and `-v`/`--version` exit 0 and win over `-n` and other args before `--`. Git intercepts `git open --help` (man page), so `-h` is the in-binary path.
 - Unknown options and extra args print `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`).
@@ -68,14 +70,14 @@ main() → processArgs → GetURL(arg, ref) → parseType → parsePath (→ str
 
 **Git operations:** use `gitw` (or `ldez/go-git-cmd-wrapper/v2` directly). In non-test code, never use `exec.Command("git", ...)`. `gitw` wraps `go-git-cmd-wrapper`; empty `path` → cwd.
 
-**Error handling:** `fmt.Errorf("context: %w", err)`. Explicit errors: `"local remotes are not supported"`, `"unable to find provider for: <host>"`, `"unable to parse remote url: unsupported format"` (never include the remote; it may carry `user:pw@`).
+**Error handling:** `fmt.Errorf("context: %w", err)`. Explicit errors: `"local remotes are not supported"`, `"unable to find provider for: <host>"`, `"unable to parse remote url: unsupported format"` (never include the remote; it may carry `user:pw@`), `"no such remote: <name>"` (unwrapped on purpose; git's own error is just `exit status 2`).
 
 **Providers:** defaults are `github.com`, `gitlab.com`, `bitbucket.org`, `codeberg.org`, each with a `rawLineFormat` (fake `%l` verb) converted by `parseRawLineFormat`. Custom: `git config open.<https-url>.{commitprefix,pathprefix,lineformat}` (local wins over global). `commitprefix`/`pathprefix` are required and `BaseURL` must be `http`/`https` with a host, or the provider is skipped. `lineformat` is optional with zero to two `%l` verbs; a missing/invalid one drops only line anchors (stderr warning). `TestDefaultProviders` and `TestDefaultProvidersLineFormat` enforce this for defaults.
 
 ## Testing
 
 - `TestGetURL` and `TestParsePath` (`open/open_test.go`) run against the real checked-out repo — don't move `open/` without updating them.
-- `TestGetURLErrors`, `TestGetURLBareRepo`, `TestGetURLWorktree` use hermetic temp repos.
+- `TestGetURLErrors`, `TestGetURLBareRepo`, `TestGetURLWorktree`, `TestGetURLRemote` (and `gitw`'s `TestRemoteURL`) use hermetic temp repos.
 - `TestGetURLWindowsAbsolutePath` is Windows-only (drive-letter paths).
 - `TestParseRepository` is table-driven; add a case for any new remote format (its drive-path case is Windows-only).
 - `TestFromConfig`/`TestFromConfigLocal` isolate git config via `GIT_CONFIG_GLOBAL`.
