@@ -110,11 +110,11 @@ func TestGetURL(t *testing.T) {
 		},
 		"commit sha with extension": {
 			arg:         "7605d91.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/7605d91.txt",
 		},
 		"commit sha as a folder": {
 			arg:         "7605d91/example.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/7605d91/example.txt",
 		},
 		"out of git dir relative path": {
 			arg:         filepath.FromSlash("../../.."),
@@ -140,12 +140,44 @@ func TestGetURL(t *testing.T) {
 			arg:         "open_test.go:10-3",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L10-L3",
 		},
-		"non-numeric suffix is not a line spec, no literal match falls back to root": {
-			arg:         "open_test.go:abc",
+		"colon filename with no matching file is a missing path with a line": {
+			arg:         "notes:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/notes#L42",
+		},
+		"missing path is kept": {
+			arg:         "nonexistent",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent",
+		},
+		"missing nested path is kept": {
+			arg:         "nonexistent/foo.go",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent/foo.go",
+		},
+		"path under a file is kept": {
+			arg:         "open_test.go/foo",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go/foo",
+		},
+		"missing path with line is kept": {
+			arg:         "missing.go:10",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/missing.go#L10",
+		},
+		"missing path with line range is kept": {
+			arg:         "nonexistent:42-50",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent#L42-L50",
+		},
+		"missing nested path with line is kept": {
+			arg:         "nonexistent/foo.go:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent/foo.go#L42",
+		},
+		"missing path with trailing slash and line is kept": {
+			arg:         "nonexistent/:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent#L42",
+		},
+		"outside the repo absolute missing path": {
+			arg:         filepath.Join(homedir, "nonexistent"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
-		"literal colon filename with no matching file falls back to root": {
-			arg:         "notes:42",
+		"outside the repo relative missing path": {
+			arg:         filepath.FromSlash("../../../../x"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 	}
@@ -326,32 +358,6 @@ func TestGetURLWorktree(t *testing.T) {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, c.expectedURL)
 			}
 		})
-	}
-}
-
-func TestGetURLWindowsAbsolutePath(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("windows drive-letter path parsing only applies on windows")
-	}
-
-	ref, err := gitw.CurrentRef(".")
-	if err != nil {
-		t.Fatalf("unable to get local ref for test: %v", err)
-	}
-
-	abs, err := filepath.Abs("open_test.go")
-	if err != nil {
-		t.Fatalf("unable to get absolute path: %v", err)
-	}
-
-	url, err := GetURL(abs+":3-10", "", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	expectedURL := fmt.Sprintf("https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L3-L10", ref)
-	if url != expectedURL {
-		t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
 	}
 }
 
@@ -666,9 +672,9 @@ func TestParsePathMissingUnderSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, _, _, err := parsePath(filepath.Join(link, "gone.go"), gitroot, false)
-	if err != nil || path != "gone.go" {
-		t.Fatalf("unexpected result:\n\t(GOT): path=%#v err=%v\n\t(WNT): path=%#v err=nil", path, err, "gone.go")
+	path, _, _ := parsePath(filepath.Join(link, "gone.go"), gitroot)
+	if path != "gone.go" {
+		t.Fatalf("unexpected result:\n\t(GOT): path=%#v\n\t(WNT): path=%#v", path, "gone.go")
 	}
 }
 
@@ -683,8 +689,6 @@ func TestParsePath(t *testing.T) {
 		expectedPath  string
 		expectedStart int
 		expectedEnd   int
-		keepMissing   bool
-		wantErr       bool
 	}{
 		"empty argument": {
 			path:         "",
@@ -714,34 +718,27 @@ func TestParsePath(t *testing.T) {
 		"in-repo name starting with dots": {
 			path:         filepath.Join(gitroot, "..foo"),
 			expectedPath: "..foo",
-			keepMissing:  true,
 		},
 		"out of git root": {
 			path:         filepath.FromSlash("../../../.."),
 			expectedPath: "",
-			wantErr:      true,
 		},
-		"file does not exist": {
+		"file does not exist is kept": {
 			path:         "README.txt",
-			expectedPath: "",
-			wantErr:      true,
+			expectedPath: "open/README.txt",
 		},
-		"file does not exist is kept when it may exist at a ref": {
+		"file does not exist with line is kept": {
 			path:          "gone.go:3",
 			expectedPath:  "open/gone.go",
 			expectedStart: 3,
-			keepMissing:   true,
 		},
-		"out of git root with missing path still errors": {
+		"out of git root, missing path": {
 			path:         filepath.FromSlash("../../../../gone.go"),
 			expectedPath: "",
-			keepMissing:  true,
-			wantErr:      true,
 		},
-		"path walks through a file": {
+		"path walks through a file is kept": {
 			path:         filepath.FromSlash("open_test.go/foo"),
-			expectedPath: "",
-			wantErr:      true,
+			expectedPath: "open/open_test.go/foo",
 		},
 		"git root with line is dropped": {
 			path:         filepath.FromSlash("../:5"),
@@ -755,12 +752,8 @@ func TestParsePath(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, start, end, err := parsePath(c.path, gitroot, !c.keepMissing)
-			if err != nil && !c.wantErr {
-				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
-			} else if err == nil && c.wantErr {
-				t.Fatalf("expected error:\n\t(GOT): nil")
-			} else if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
+			path, start, end := parsePath(c.path, gitroot)
+			if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
 				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v end=%#v\n\t(WNT): path=%#v start=%#v end=%#v",
 					path, start, end, c.expectedPath, c.expectedStart, c.expectedEnd)
 			}

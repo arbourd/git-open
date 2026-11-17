@@ -55,7 +55,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 		// If toplevel fails, we might be in a bare repo
 		gitroot, err = gitw.AbsoluteGitDir(".")
 		if err != nil {
-			return "", fmt.Errorf("not a git repository")
+			return "", errors.New("not a git repository")
 		}
 	}
 
@@ -65,18 +65,16 @@ func GetURL(arg, ref, remote string) (string, error) {
 			t = Path
 		}
 	}
-	override := ref != ""
-	if override {
+	if ref != "" {
 		if t == Commit {
-			return "", fmt.Errorf("a ref cannot be combined with a commit")
+			return "", errors.New("a ref cannot be combined with a commit")
 		}
 		// The root at a ref is the path URL with an empty path
 		t = Path
 	}
 	var lstart, lend int
 	if t == Path {
-		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL
-		arg, lstart, lend, _ = parsePath(arg, gitroot, !override)
+		arg, lstart, lend = parsePath(arg, gitroot)
 	}
 
 	remoteURL, ref, err := getRemoteRef(gitroot, ref, remote)
@@ -89,7 +87,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 		return "", err
 	}
 	if host == "" {
-		return "", fmt.Errorf("local remotes are not supported")
+		return "", errors.New("local remotes are not supported")
 	}
 
 	providers := Providers()
@@ -125,13 +123,13 @@ func GetURL(arg, ref, remote string) (string, error) {
 }
 
 // parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers.
-// A path missing from disk is an error if mustExist, otherwise it is kept, as it may exist at another ref.
-func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
+// A path missing from disk is kept, as it may exist at another ref. A path outside the repo returns an
+// empty path, which gives the tree URL of the ref.
+func parsePath(path, gitroot string) (rel string, lstart, lend int) {
 	if path == "" {
-		return "", 0, 0, nil
+		return "", 0, 0
 	}
 
-	var lstart, lend int
 	if stripped, start, end := stripLine(path); stripped != path {
 		// Prefer the literal, colon-suffixed argument when it names a real
 		// file or directory; otherwise treat the suffix as a line spec.
@@ -141,11 +139,7 @@ func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
 	}
 	path = filepath.Clean(path)
 
-	info, err := os.Stat(path)
-	if err != nil && mustExist && (os.IsNotExist(err) || ancestorIsFile(path)) {
-		return "", 0, 0, err
-	}
-	if err == nil && info.IsDir() {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		lstart, lend = 0, 0
 	}
 
@@ -155,15 +149,15 @@ func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)
 	if err != nil || !filepath.IsLocal(rel) {
-		return "", 0, 0, fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
+		return "", 0, 0
 	}
 
 	if rel == "." {
-		return "", 0, 0, nil
+		return "", 0, 0
 	}
 
 	// Convert all path separators to `/` and trim trailing `/`
-	return filepath.ToSlash(rel), lstart, lend, nil
+	return filepath.ToSlash(rel), lstart, lend
 }
 
 // resolveSymlinks resolves symlinks in path, or in its deepest existing ancestor if path is missing
@@ -176,23 +170,6 @@ func resolveSymlinks(path string) string {
 		return path
 	}
 	return filepath.Join(resolveSymlinks(dir), filepath.Base(path))
-}
-
-// ancestorIsFile reports whether path is invalid directory because an ancestor
-// is a file -- POSIX's ENOTDIR or Windows' ERROR_PATH_NOT_FOUND
-func ancestorIsFile(path string) bool {
-	dir := filepath.Dir(path)
-	for {
-		parent, err := os.Stat(dir)
-		if err == nil {
-			return !parent.IsDir()
-		}
-		next := filepath.Dir(dir)
-		if next == dir {
-			return false
-		}
-		dir = next
-	}
 }
 
 // getRemoteRef returns the URL of the named remote (default when empty) and reference (branch, tag, commit), for a provided Git repository.
