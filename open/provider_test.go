@@ -442,7 +442,7 @@ func TestFromConfig(t *testing.T) {
 
 			p := fromConfig()
 			if len(p) != len(c.expectedProviders) {
-				t.Logf("unexpected number of providers\n\t(GOT): %#v\n\t(WNT): %#v", len(p), len(c.expectedProviders))
+				t.Fatalf("unexpected number of providers:\n\t(GOT): %d %#v\n\t(WNT): %d %#v", len(p), p, len(c.expectedProviders), c.expectedProviders)
 			}
 			sortOpt := cmpopts.SortSlices(func(a, b Provider) bool { return a.baseURL < b.baseURL })
 			if !cmp.Equal(p, c.expectedProviders, sortOpt, cmp.AllowUnexported(Provider{})) {
