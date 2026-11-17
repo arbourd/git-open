@@ -75,8 +75,8 @@ func GetURL(arg, ref, remote string) (string, error) {
 	}
 	var lstart, lend int
 	if t == Path {
-		// Ignore parsePath errors: invalid or out-of-repo paths fall back to the root URL
-		arg, lstart, lend, _ = parsePath(arg, gitroot, !override)
+		// Ignore parsePath errors: out-of-repo paths give the tree URL of the ref
+		arg, lstart, lend, _ = parsePath(arg, gitroot)
 	}
 
 	remoteURL, ref, err := getRemoteRef(gitroot, ref, remote)
@@ -125,8 +125,8 @@ func GetURL(arg, ref, remote string) (string, error) {
 }
 
 // parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers.
-// A path missing from disk is an error if mustExist, otherwise it is kept, as it may exist at another ref.
-func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
+// A path missing from disk is kept, as it may exist at another ref.
+func parsePath(path, gitroot string) (string, int, int, error) {
 	if path == "" {
 		return "", 0, 0, nil
 	}
@@ -141,11 +141,7 @@ func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
 	}
 	path = filepath.Clean(path)
 
-	info, err := os.Stat(path)
-	if err != nil && mustExist && (os.IsNotExist(err) || ancestorIsFile(path)) {
-		return "", 0, 0, err
-	}
-	if err == nil && info.IsDir() {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		lstart, lend = 0, 0
 	}
 
@@ -176,23 +172,6 @@ func resolveSymlinks(path string) string {
 		return path
 	}
 	return filepath.Join(resolveSymlinks(dir), filepath.Base(path))
-}
-
-// ancestorIsFile reports whether path is invalid directory because an ancestor
-// is a file -- POSIX's ENOTDIR or Windows' ERROR_PATH_NOT_FOUND
-func ancestorIsFile(path string) bool {
-	dir := filepath.Dir(path)
-	for {
-		parent, err := os.Stat(dir)
-		if err == nil {
-			return !parent.IsDir()
-		}
-		next := filepath.Dir(dir)
-		if next == dir {
-			return false
-		}
-		dir = next
-	}
 }
 
 // getRemoteRef returns the URL of the named remote (default when empty) and reference (branch, tag, commit), for a provided Git repository.

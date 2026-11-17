@@ -110,11 +110,11 @@ func TestGetURL(t *testing.T) {
 		},
 		"commit sha with extension": {
 			arg:         "7605d91.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/7605d91.txt",
 		},
 		"commit sha as a folder": {
 			arg:         "7605d91/example.txt",
-			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/7605d91/example.txt",
 		},
 		"out of git dir relative path": {
 			arg:         filepath.FromSlash("../../.."),
@@ -140,12 +140,32 @@ func TestGetURL(t *testing.T) {
 			arg:         "open_test.go:10-3",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L10-L3",
 		},
-		"non-numeric suffix is not a line spec, no literal match falls back to root": {
-			arg:         "open_test.go:abc",
+		"colon filename with no matching file is a missing path with a line": {
+			arg:         "notes:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/notes#L42",
+		},
+		"missing path is kept": {
+			arg:         "nonexistent",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent",
+		},
+		"missing nested path is kept": {
+			arg:         "nonexistent/foo.go",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent/foo.go",
+		},
+		"path under a file is kept": {
+			arg:         "open_test.go/foo",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/open_test.go/foo",
+		},
+		"missing path with line is kept": {
+			arg:         "missing.go:10",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/missing.go#L10",
+		},
+		"outside the repo absolute path": {
+			arg:         filepath.FromSlash("/tmp/x"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
-		"literal colon filename with no matching file falls back to root": {
-			arg:         "notes:42",
+		"outside the repo relative missing path": {
+			arg:         filepath.FromSlash("../../../../x"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 	}
@@ -666,7 +686,7 @@ func TestParsePathMissingUnderSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, _, _, err := parsePath(filepath.Join(link, "gone.go"), gitroot, false)
+	path, _, _, err := parsePath(filepath.Join(link, "gone.go"), gitroot)
 	if err != nil || path != "gone.go" {
 		t.Fatalf("unexpected result:\n\t(GOT): path=%#v err=%v\n\t(WNT): path=%#v err=nil", path, err, "gone.go")
 	}
@@ -683,7 +703,6 @@ func TestParsePath(t *testing.T) {
 		expectedPath  string
 		expectedStart int
 		expectedEnd   int
-		keepMissing   bool
 		wantErr       bool
 	}{
 		"empty argument": {
@@ -721,27 +740,23 @@ func TestParsePath(t *testing.T) {
 			expectedPath: "",
 			wantErr:      true,
 		},
-		"file does not exist": {
+		"file does not exist is kept": {
 			path:         "README.txt",
-			expectedPath: "",
-			wantErr:      true,
+			expectedPath: "open/README.txt",
 		},
-		"file does not exist is kept when it may exist at a ref": {
+		"file does not exist with line is kept": {
 			path:          "gone.go:3",
 			expectedPath:  "open/gone.go",
 			expectedStart: 3,
-			keepMissing:   true,
 		},
 		"out of git root with missing path still errors": {
 			path:         filepath.FromSlash("../../../../gone.go"),
 			expectedPath: "",
-			keepMissing:  true,
 			wantErr:      true,
 		},
-		"path walks through a file": {
+		"path walks through a file is kept": {
 			path:         filepath.FromSlash("open_test.go/foo"),
-			expectedPath: "",
-			wantErr:      true,
+			expectedPath: "open/open_test.go/foo",
 		},
 		"git root with line is dropped": {
 			path:         filepath.FromSlash("../:5"),
@@ -755,7 +770,7 @@ func TestParsePath(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, start, end, err := parsePath(c.path, gitroot, !c.keepMissing)
+			path, start, end, err := parsePath(c.path, gitroot)
 			if err != nil && !c.wantErr {
 				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
 			} else if err == nil && c.wantErr {
