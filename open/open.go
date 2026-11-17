@@ -55,7 +55,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 		// If toplevel fails, we might be in a bare repo
 		gitroot, err = gitw.AbsoluteGitDir(".")
 		if err != nil {
-			return "", fmt.Errorf("not a git repository")
+			return "", errors.New("not a git repository")
 		}
 	}
 
@@ -67,7 +67,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 	}
 	if ref != "" {
 		if t == Commit {
-			return "", fmt.Errorf("a ref cannot be combined with a commit")
+			return "", errors.New("a ref cannot be combined with a commit")
 		}
 		// The root at a ref is the path URL with an empty path
 		t = Path
@@ -87,7 +87,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 		return "", err
 	}
 	if host == "" {
-		return "", fmt.Errorf("local remotes are not supported")
+		return "", errors.New("local remotes are not supported")
 	}
 
 	providers := Providers()
@@ -125,12 +125,11 @@ func GetURL(arg, ref, remote string) (string, error) {
 // parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers.
 // A path missing from disk is kept, as it may exist at another ref. A path outside the repo returns an
 // empty path, which gives the tree URL of the ref.
-func parsePath(path, gitroot string) (string, int, int) {
+func parsePath(path, gitroot string) (rel string, lstart, lend int) {
 	if path == "" {
 		return "", 0, 0
 	}
 
-	var lstart, lend int
 	if stripped, start, end := stripLine(path); stripped != path {
 		// Prefer the literal, colon-suffixed argument when it names a real
 		// file or directory; otherwise treat the suffix as a line spec.

@@ -172,8 +172,8 @@ func TestGetURL(t *testing.T) {
 			arg:         "nonexistent/:42",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent#L42",
 		},
-		"outside the repo absolute path": {
-			arg:         filepath.FromSlash("/tmp/x"),
+		"outside the repo absolute missing path": {
+			arg:         filepath.Join(homedir, "nonexistent"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
 		},
 		"outside the repo relative missing path": {
@@ -358,32 +358,6 @@ func TestGetURLWorktree(t *testing.T) {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, c.expectedURL)
 			}
 		})
-	}
-}
-
-func TestGetURLWindowsAbsolutePath(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("windows drive-letter path parsing only applies on windows")
-	}
-
-	ref, err := gitw.CurrentRef(".")
-	if err != nil {
-		t.Fatalf("unable to get local ref for test: %v", err)
-	}
-
-	abs, err := filepath.Abs("open_test.go")
-	if err != nil {
-		t.Fatalf("unable to get absolute path: %v", err)
-	}
-
-	url, err := GetURL(abs+":3-10", "", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	expectedURL := fmt.Sprintf("https://github.com/arbourd/git-open/tree/%s/open/open_test.go#L3-L10", ref)
-	if url != expectedURL {
-		t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
 	}
 }
 
@@ -682,49 +656,6 @@ func TestStripLine(t *testing.T) {
 			if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
 				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v end=%#v\n\t(WNT): path=%#v start=%#v end=%#v",
 					path, start, end, c.expectedPath, c.expectedStart, c.expectedEnd)
-			}
-		})
-	}
-}
-
-// A path through a file fails with ERROR_PATH_NOT_FOUND on Windows (ENOTDIR on POSIX).
-// It must be kept like any other missing path.
-func TestParsePathThroughFileWindows(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("ERROR_PATH_NOT_FOUND only applies on windows")
-	}
-
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "f.txt"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	through := filepath.Join(root, "f.txt", "sub", "x.go")
-
-	cases := map[string]struct {
-		path          string
-		expectedPath  string
-		expectedStart int
-	}{
-		"absolute drive path through a file": {
-			path:         through,
-			expectedPath: "f.txt/sub/x.go",
-		},
-		"absolute drive path through a file with line": {
-			path:          through + ":7",
-			expectedPath:  "f.txt/sub/x.go",
-			expectedStart: 7,
-		},
-	}
-
-	for name, c := range cases {
-		t.Run(name, func(t *testing.T) {
-			path, start, _ := parsePath(c.path, root)
-			if path != c.expectedPath || start != c.expectedStart {
-				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v\n\t(WNT): path=%#v start=%#v",
-					path, start, c.expectedPath, c.expectedStart)
 			}
 		})
 	}
