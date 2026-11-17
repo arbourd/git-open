@@ -1,4 +1,4 @@
-.TH GIT-OPEN 1 "2026-11-12" "git-open" "User Commands"
+.TH GIT-OPEN 1 "2026-11-16" "git-open" "User Commands"
 .SH NAME
 git-open \- open a git repository, file, or commit in the browser
 .SH SYNOPSIS
@@ -11,16 +11,15 @@ opens the current repository in the web browser. With an argument, it opens
 that file, folder, or commit instead. Providers are matched by the host of the
 remote URL.
 .PP
-If the argument is missing, outside the repository, or not found, the
-repository root is opened.
+A path that does not exist is still opened, so the URL may 404. A path outside
+the repository, or \fB\&.\fR at its root, opens the tree URL at the ref.
 .SH OPTIONS
 .TP
 .BR \-r ", " \-\-ref " " \fIref\fR
 Open at a branch, tag, or commit instead of the current branch. Applies to the
-repository root, files, and folders, and a path missing from disk is kept; it
-cannot be combined with a
+repository root, files, and folders. It cannot be combined with a
 .I commit
-argument. The
+argument. The ref is used literally and is not checked, so origin/main 404s. The
 .BI \-\-ref= ref
 form is also accepted.
 .TP
@@ -34,7 +33,11 @@ form is also accepted. An unknown remote is an error. Combines with
 Print the URL to standard output instead of opening it in the browser.
 .TP
 .BR \-h ", " \-\-help
-Print usage information and exit.
+Print usage information and exit. Git intercepts
+.B git open \-\-help
+to show this page, so use
+.B \-h
+for the usage text.
 .TP
 .BR \-v ", " \-\-version
 Print the version and exit.
@@ -48,13 +51,17 @@ A file or folder in the repository. A trailing
 .I :line
 or
 .I :start\-end
-opens that line or range of lines of a file.
+opens that line or range of lines of a file. The suffix is ignored for a folder.
 .TP
 .I commit
-A commit hash of 7 to 64 hexadecimal characters.
+A commit hash of 7 to 64 lowercase hexadecimal characters.
 .SH CONFIGURATION
 Providers other than github.com, gitlab.com, bitbucket.org and codeberg.org
 are added with git config. Local repository config takes precedence over global.
+The
+.I url
+must be an http or https URL with a host. A provider missing a required key is
+skipped.
 .TP
 .B open.<url>.commitprefix
 Path segment between the repository and a commit hash. Required.
@@ -67,7 +74,9 @@ Line anchor template where
 .B %l
 is a line number. At most two
 .B %l
-may be given, for the start and end lines. Optional.
+may be given, for the start and end lines. Optional. If it is missing or
+invalid, only line anchors are dropped, and a warning is printed to standard
+error.
 .PP
 .RS
 .EX
@@ -76,6 +85,11 @@ git config \-\-global open.https://git.example.com.pathprefix tree
 git config \-\-global open.https://git.example.com.lineformat "L%l\-L%l"
 .EE
 .RE
+.SH EXIT STATUS
+Exits 0 on success, including \fB\-h\fR and \fB\-v\fR. Any error exits 1 and
+prints a line beginning
+.B error:
+to standard error.
 .SH EXAMPLES
 .EX
 $ git open

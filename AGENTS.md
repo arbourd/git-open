@@ -48,8 +48,8 @@ main() → processArgs → GetURL(arg, ref, remote) → parseType → parsePath 
 - SCP (`scpRegex`): `user@` is optional. Without a user, the path must contain `/`, not start with `//`, and not contain `@`, so `https://…`, `mailto:x` and `user:pw@host:…` fall through to `url.Parse`; opaque URLs error.
 - `arg` is `Root` if empty, `Commit` if 7–64 hex chars (unless a file by that name exists), else `Path`.
 - `parsePath` first splits a trailing `:line`/`:start-end` (`stripLine`), only if the literal arg doesn't exist on disk; dropped for directories.
-- A non-empty `--ref` replaces the current ref and skips `CurrentRef`. `Root` becomes `Path` with an empty path (the tree URL), a path missing from disk is kept (`parsePath`'s `mustExist`), and a `Commit` is an error.
-- Missing, outside-repo, or file-ancestor paths (`ancestorIsFile`, unifying POSIX `ENOTDIR` and Windows `ERROR_PATH_NOT_FOUND`) silently fall back to the root URL.
+- A non-empty `--ref` replaces the current ref and skips `CurrentRef`. `Root` becomes `Path` with an empty path (the tree URL), and a `Commit` is an error.
+- Paths missing from disk (including under a file) are kept: `tree/<ref>/<path>`. Only paths outside the repo (and `.` at the root) silently give the ref's tree URL, with or without `--ref`.
 - Providers match by exact host: `defaultProviders` first, then `fromConfig()` (both via `Providers()`).
 - URL pattern: `{BaseURL}/{repo}[/{CommitPrefix|PathPrefix}/{ref/sha}[/{path}]]`, run through `escapePath` (`url.PathEscape`, unescape `/`, trim trailing `/`).
 - `lineAnchor(start, end)` uses `lineFormatRange` (`%d` verbs, from raw `%l` via `parseRawLineFormat`); falls back to single-verb `lineFormat` (dropping `end`) when `end` is 0 or `lineFormatRange` is absent.
