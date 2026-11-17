@@ -65,8 +65,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 			t = Path
 		}
 	}
-	override := ref != ""
-	if override {
+	if ref != "" {
 		if t == Commit {
 			return "", fmt.Errorf("a ref cannot be combined with a commit")
 		}
@@ -75,8 +74,7 @@ func GetURL(arg, ref, remote string) (string, error) {
 	}
 	var lstart, lend int
 	if t == Path {
-		// Ignore parsePath errors: out-of-repo paths give the tree URL of the ref
-		arg, lstart, lend, _ = parsePath(arg, gitroot)
+		arg, lstart, lend = parsePath(arg, gitroot)
 	}
 
 	remoteURL, ref, err := getRemoteRef(gitroot, ref, remote)
@@ -125,10 +123,11 @@ func GetURL(arg, ref, remote string) (string, error) {
 }
 
 // parsePath returns the cleaned path, relative to the gitroot, and the parsed start and end line numbers.
-// A path missing from disk is kept, as it may exist at another ref.
-func parsePath(path, gitroot string) (string, int, int, error) {
+// A path missing from disk is kept, as it may exist at another ref. A path outside the repo returns an
+// empty path, which gives the tree URL of the ref.
+func parsePath(path, gitroot string) (string, int, int) {
 	if path == "" {
-		return "", 0, 0, nil
+		return "", 0, 0
 	}
 
 	var lstart, lend int
@@ -151,15 +150,15 @@ func parsePath(path, gitroot string) (string, int, int, error) {
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)
 	if err != nil || !filepath.IsLocal(rel) {
-		return "", 0, 0, fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
+		return "", 0, 0
 	}
 
 	if rel == "." {
-		return "", 0, 0, nil
+		return "", 0, 0
 	}
 
 	// Convert all path separators to `/` and trim trailing `/`
-	return filepath.ToSlash(rel), lstart, lend, nil
+	return filepath.ToSlash(rel), lstart, lend
 }
 
 // resolveSymlinks resolves symlinks in path, or in its deepest existing ancestor if path is missing

@@ -160,6 +160,18 @@ func TestGetURL(t *testing.T) {
 			arg:         "missing.go:10",
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/missing.go#L10",
 		},
+		"missing path with line range is kept": {
+			arg:         "nonexistent:42-50",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent#L42-L50",
+		},
+		"missing nested path with line is kept": {
+			arg:         "nonexistent/foo.go:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent/foo.go#L42",
+		},
+		"missing path with trailing slash and line is kept": {
+			arg:         "nonexistent/:42",
+			expectedURL: "https://github.com/arbourd/git-open/tree/%s/open/nonexistent#L42",
+		},
 		"outside the repo absolute path": {
 			arg:         filepath.FromSlash("/tmp/x"),
 			expectedURL: "https://github.com/arbourd/git-open/tree/%s",
@@ -675,6 +687,49 @@ func TestStripLine(t *testing.T) {
 	}
 }
 
+// A path through a file fails with ERROR_PATH_NOT_FOUND on Windows (ENOTDIR on POSIX).
+// It must be kept like any other missing path.
+func TestParsePathThroughFileWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("ERROR_PATH_NOT_FOUND only applies on windows")
+	}
+
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "f.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	through := filepath.Join(root, "f.txt", "sub", "x.go")
+
+	cases := map[string]struct {
+		path          string
+		expectedPath  string
+		expectedStart int
+	}{
+		"absolute drive path through a file": {
+			path:         through,
+			expectedPath: "f.txt/sub/x.go",
+		},
+		"absolute drive path through a file with line": {
+			path:          through + ":7",
+			expectedPath:  "f.txt/sub/x.go",
+			expectedStart: 7,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			path, start, _ := parsePath(c.path, root)
+			if path != c.expectedPath || start != c.expectedStart {
+				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v\n\t(WNT): path=%#v start=%#v",
+					path, start, c.expectedPath, c.expectedStart)
+			}
+		})
+	}
+}
+
 func TestParsePathMissingUnderSymlink(t *testing.T) {
 	root := t.TempDir()
 	link := filepath.Join(t.TempDir(), "link")
@@ -686,9 +741,9 @@ func TestParsePathMissingUnderSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, _, _, err := parsePath(filepath.Join(link, "gone.go"), gitroot)
-	if err != nil || path != "gone.go" {
-		t.Fatalf("unexpected result:\n\t(GOT): path=%#v err=%v\n\t(WNT): path=%#v err=nil", path, err, "gone.go")
+	path, _, _ := parsePath(filepath.Join(link, "gone.go"), gitroot)
+	if path != "gone.go" {
+		t.Fatalf("unexpected result:\n\t(GOT): path=%#v\n\t(WNT): path=%#v", path, "gone.go")
 	}
 }
 
@@ -703,7 +758,6 @@ func TestParsePath(t *testing.T) {
 		expectedPath  string
 		expectedStart int
 		expectedEnd   int
-		wantErr       bool
 	}{
 		"empty argument": {
 			path:         "",
@@ -733,12 +787,10 @@ func TestParsePath(t *testing.T) {
 		"in-repo name starting with dots": {
 			path:         filepath.Join(gitroot, "..foo"),
 			expectedPath: "..foo",
-			keepMissing:  true,
 		},
 		"out of git root": {
 			path:         filepath.FromSlash("../../../.."),
 			expectedPath: "",
-			wantErr:      true,
 		},
 		"file does not exist is kept": {
 			path:         "README.txt",
@@ -749,10 +801,9 @@ func TestParsePath(t *testing.T) {
 			expectedPath:  "open/gone.go",
 			expectedStart: 3,
 		},
-		"out of git root with missing path still errors": {
+		"out of git root, missing path": {
 			path:         filepath.FromSlash("../../../../gone.go"),
 			expectedPath: "",
-			wantErr:      true,
 		},
 		"path walks through a file is kept": {
 			path:         filepath.FromSlash("open_test.go/foo"),
@@ -770,12 +821,8 @@ func TestParsePath(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			path, start, end, err := parsePath(c.path, gitroot)
-			if err != nil && !c.wantErr {
-				t.Fatalf("unexpected error:\n\t(GOT): %s\n\t(WNT): nil", err)
-			} else if err == nil && c.wantErr {
-				t.Fatalf("expected error:\n\t(GOT): nil")
-			} else if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
+			path, start, end := parsePath(c.path, gitroot)
+			if path != c.expectedPath || start != c.expectedStart || end != c.expectedEnd {
 				t.Fatalf("unexpected result:\n\t(GOT): path=%#v start=%#v end=%#v\n\t(WNT): path=%#v start=%#v end=%#v",
 					path, start, end, c.expectedPath, c.expectedStart, c.expectedEnd)
 			}
