@@ -36,10 +36,24 @@ func TestGetURL(t *testing.T) {
 		t.Fatalf("cannot get home directory: %v", err)
 	}
 
-	if err := os.WriteFile("abcdef1", nil, 0o644); err != nil {
+	// Build a repo with a known origin, laid out like this one, so the expected
+	// URLs don't depend on the checkout's own remote.
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "Test")
+	runGit(t, repo, "remote", "add", "origin", "https://github.com/arbourd/git-open.git")
+	runGit(t, repo, "commit", "--allow-empty", "-m", "init")
+	pkgDir := filepath.Join(repo, "open")
+	if err := os.Mkdir(pkgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Remove("abcdef1") })
+	for _, name := range []string{"open_test.go", "abcdef1"} {
+		if err := os.WriteFile(filepath.Join(pkgDir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(pkgDir)
 
 	cases := map[string]struct {
 		arg         string
