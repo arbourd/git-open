@@ -720,6 +720,11 @@ func TestParsePath(t *testing.T) {
 			path:         filepath.FromSlash(".././/LICENSE"),
 			expectedPath: "LICENSE",
 		},
+		"in-repo name starting with dots": {
+			path:         filepath.Join(gitroot, "..foo"),
+			expectedPath: "..foo",
+			keepMissing:  true,
+		},
 		"out of git root": {
 			path:         filepath.FromSlash("../../../.."),
 			expectedPath: "",

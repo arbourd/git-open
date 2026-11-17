@@ -154,7 +154,7 @@ func parsePath(path, gitroot string, mustExist bool) (string, int, int, error) {
 
 	// Check if path is within Git root
 	rel, err := filepath.Rel(gitroot, path)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || !filepath.IsLocal(rel) {
 		return "", 0, 0, fmt.Errorf("path does not contain gitroot: %s; %s", path, gitroot)
 	}
 
