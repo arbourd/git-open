@@ -1,30 +1,40 @@
 package gitw
 
 import (
+	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/ldez/go-git-cmd-wrapper/v2/types"
 )
 
+// runGit runs git in dir with a hermetic environment: inherited repo-selection
+// variables are dropped and commit signing is disabled.
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		key, _, _ := strings.Cut(kv, "=")
+		return key == "GIT_DIR" || key == "GIT_WORK_TREE" || key == "GIT_INDEX_FILE"
+	})
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func TestConfigGetRegexp(t *testing.T) {
 	dir := t.TempDir()
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	run("init")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "Test")
-	run("config", "open.https://git.example.dev.commitprefix", "commit")
-	run("config", "open.https://git.example.dev.pathprefix", "tree")
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "open.https://git.example.dev.commitprefix", "commit")
+	runGit(t, dir, "config", "open.https://git.example.dev.pathprefix", "tree")
 
 	t.Chdir(dir)
 
@@ -40,18 +50,9 @@ func TestConfigGetRegexp(t *testing.T) {
 func TestRemoteURL(t *testing.T) {
 	dir := t.TempDir()
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	run("init")
-	run("remote", "add", "origin", "https://example.com/a/origin.git")
-	run("remote", "add", "fork", "https://example.com/b/fork.git")
+	runGit(t, dir, "init")
+	runGit(t, dir, "remote", "add", "origin", "https://example.com/a/origin.git")
+	runGit(t, dir, "remote", "add", "fork", "https://example.com/b/fork.git")
 
 	cases := map[string]struct {
 		remote  string
@@ -101,13 +102,8 @@ func TestCwd(t *testing.T) {
 			g := &types.Cmd{}
 			cwd(c.path)(g)
 
-			if len(g.BaseOptions) != len(c.expectedOpts) {
+			if !slices.Equal(g.BaseOptions, c.expectedOpts) {
 				t.Fatalf("unexpected BaseOptions:\n\t(GOT): %#v\n\t(WNT): %#v", g.BaseOptions, c.expectedOpts)
-			}
-			for i := range c.expectedOpts {
-				if g.BaseOptions[i] != c.expectedOpts[i] {
-					t.Fatalf("unexpected BaseOptions:\n\t(GOT): %#v\n\t(WNT): %#v", g.BaseOptions, c.expectedOpts)
-				}
 			}
 		})
 	}
@@ -116,21 +112,10 @@ func TestCwd(t *testing.T) {
 func TestCurrentRef(t *testing.T) {
 	dir := t.TempDir()
 
-	run := func(args ...string) string {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-
-	run("init", "-b", "test-branch")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "Test")
-	run("commit", "--allow-empty", "-m", "init")
+	runGit(t, dir, "init", "-b", "test-branch")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "init")
 
 	t.Run("branch", func(t *testing.T) {
 		ref, err := CurrentRef(dir)
@@ -143,8 +128,8 @@ func TestCurrentRef(t *testing.T) {
 	})
 
 	t.Run("detached HEAD", func(t *testing.T) {
-		sha := run("rev-parse", "HEAD")
-		run("checkout", "--detach")
+		sha := runGit(t, dir, "rev-parse", "HEAD")
+		runGit(t, dir, "checkout", "--detach")
 
 		ref, err := CurrentRef(dir)
 		if err != nil {

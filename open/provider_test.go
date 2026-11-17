@@ -3,9 +3,7 @@ package open
 import (
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -281,26 +279,16 @@ func TestRootURL(t *testing.T) {
 func TestFromConfig(t *testing.T) {
 	root := t.TempDir()
 	gitconfig := filepath.Join(root, ".gitconfig")
-
-	if runtime.GOOS == "darwin" {
-		err := os.Setenv("XDG_CONFIG_HOME", root)
-		if err != nil {
-			t.Fatalf("unable to set XDG_CONFIG_HOME: %s", err)
-		}
+	if err := os.WriteFile(gitconfig, nil, 0o644); err != nil {
+		t.Fatalf("unable create .gitconfig: %s", err)
 	}
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
 
-	// Skip fixture on Windows in CI
-	if os.Getenv("CI") != "true" || runtime.GOOS != "windows" {
-		_, err := os.Create(gitconfig)
-		if err != nil {
-			t.Fatalf("unable create .gitconfig: %s", err)
-		}
-
-		err = os.Setenv("GIT_CONFIG_GLOBAL", gitconfig)
-		if err != nil {
-			t.Fatalf("unable to set GIT_CONFIG_GLOBAL: %s", err)
-		}
-	}
+	// Run from an empty repo so a checkout's local config can't leak in.
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	t.Chdir(repo)
 
 	cases := map[string]struct {
 		config            []string
@@ -408,7 +396,17 @@ func TestFromConfig(t *testing.T) {
 				{baseURL: "https://git.example6.dev", commitPrefix: "commit", pathPrefix: "tree", rawLineFormat: "#L%s", lineFormat: "", lineFormatRange: ""},
 			},
 		},
-		"line format with too many verbs is ignored but not dropped": {
+		"line format with too many %l verbs is ignored but not dropped": {
+			config: []string{
+				"open.https://git.example8.dev.commitprefix commit",
+				"open.https://git.example8.dev.pathprefix tree",
+				"open.https://git.example8.dev.lineformat #L%l-%l-%l",
+			},
+			expectedProviders: []Provider{
+				{baseURL: "https://git.example8.dev", commitPrefix: "commit", pathPrefix: "tree", rawLineFormat: "#L%l-%l-%l", lineFormat: "", lineFormatRange: ""},
+			},
+		},
+		"line format with unsupported verbs is ignored but not dropped": {
 			config: []string{
 				"open.https://git.example7.dev.commitprefix commit",
 				"open.https://git.example7.dev.pathprefix tree",
@@ -423,20 +421,28 @@ func TestFromConfig(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			// removes all `open.https://` Git config entries
+			// `git config --get-regexp` exits non-zero when nothing matches, so its error is ignored.
 			out, _ := git.Config(config.Global, config.GetRegexp(getRegex, ""))
 			for v := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 				key, _, _ := strings.Cut(strings.TrimSpace(v), " ")
-				_, _ = git.Config(config.Global, config.Unset(key, ""))
+				if key == "" {
+					continue
+				}
+				if _, err := git.Config(config.Global, config.Unset(key, "")); err != nil {
+					t.Fatalf("unable to unset %q: %v", key, err)
+				}
 			}
 
 			for _, v := range c.config {
 				key, val, _ := strings.Cut(v, " ")
-				_, _ = git.Config(config.Global, config.Entry(key, val))
+				if _, err := git.Config(config.Global, config.Entry(key, val)); err != nil {
+					t.Fatalf("unable to set %q: %v", key, err)
+				}
 			}
 
 			p := fromConfig()
 			if len(p) != len(c.expectedProviders) {
-				t.Logf("unexpected number of providers\n\t(GOT): %#v\n\t(WNT): %#v", len(p), len(c.expectedProviders))
+				t.Fatalf("unexpected number of providers:\n\t(GOT): %d %#v\n\t(WNT): %d %#v", len(p), p, len(c.expectedProviders), c.expectedProviders)
 			}
 			sortOpt := cmpopts.SortSlices(func(a, b Provider) bool { return a.baseURL < b.baseURL })
 			if !cmp.Equal(p, c.expectedProviders, sortOpt, cmp.AllowUnexported(Provider{})) {
@@ -449,28 +455,18 @@ func TestFromConfig(t *testing.T) {
 func TestFromConfigLocal(t *testing.T) {
 	// Redirect global config to an empty file so only local config is visible.
 	globalConfig := filepath.Join(t.TempDir(), ".gitconfig")
-	f, err := os.Create(globalConfig)
-	if err != nil {
+	if err := os.WriteFile(globalConfig, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
 	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
 
 	dir := t.TempDir()
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	run("init")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "Test")
-	run("config", "open.https://local.example.dev.commitprefix", "commit")
-	run("config", "open.https://local.example.dev.pathprefix", "tree")
-	run("config", "open.https://local.example.dev.lineformat", "L%l-L%l")
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "open.https://local.example.dev.commitprefix", "commit")
+	runGit(t, dir, "config", "open.https://local.example.dev.pathprefix", "tree")
+	runGit(t, dir, "config", "open.https://local.example.dev.lineformat", "L%l-L%l")
 
 	t.Chdir(dir)
 
