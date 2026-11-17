@@ -6,31 +6,45 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/arbourd/git-open/gitw"
 )
 
+// runGit runs git in dir with a hermetic environment: inherited repo-selection
+// variables are dropped and commit signing is disabled.
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		key, _, _ := strings.Cut(kv, "=")
+		return key == "GIT_DIR" || key == "GIT_WORK_TREE" || key == "GIT_INDEX_FILE"
+	})
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func TestGetURL(t *testing.T) {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
-		panic("cannot get home directory")
+		t.Fatalf("cannot get home directory: %v", err)
 	}
 
-	f, err := os.Create("abcdef1")
-	if err != nil {
+	if err := os.WriteFile("abcdef1", nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
 	t.Cleanup(func() { _ = os.Remove("abcdef1") })
 
 	cases := map[string]struct {
-		gitdir      string
 		arg         string
 		ref         string
 		expectedURL string
-		wantErr     bool
 	}{
 		"ref with no argument": {
 			ref:         "v1.0.0",
@@ -124,7 +138,7 @@ func TestGetURL(t *testing.T) {
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			ref, err := gitw.CurrentRef(c.gitdir)
+			ref, err := gitw.CurrentRef("")
 			if err != nil {
 				t.Fatalf("Unable to get local ref for test: %v", err)
 			}
@@ -135,11 +149,10 @@ func TestGetURL(t *testing.T) {
 			}
 
 			url, err := GetURL(c.arg, c.ref, "")
-			if err != nil && !c.wantErr {
+			if err != nil {
 				t.Fatalf("unexpected error:\n\t(GOT): %#v\n\t(WNT): nil", err)
-			} else if err == nil && c.wantErr {
-				t.Fatalf("expected error:\n\t(GOT): nil\n")
-			} else if url != expectedURL {
+			}
+			if url != expectedURL {
 				t.Fatalf("unexpected url:\n\t(GOT): %#v\n\t(WNT): %#v", url, expectedURL)
 			}
 		})
@@ -154,15 +167,6 @@ func TestGetURLRefWithCommit(t *testing.T) {
 }
 
 func TestGetURLErrors(t *testing.T) {
-	git := func(t *testing.T, dir string, args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
 	cases := map[string]struct {
 		setup   func(t *testing.T, dir string)
 		wantErr string
@@ -173,21 +177,21 @@ func TestGetURLErrors(t *testing.T) {
 		},
 		"local remote": {
 			setup: func(t *testing.T, dir string) {
-				git(t, dir, "init")
-				git(t, dir, "config", "user.email", "test@example.com")
-				git(t, dir, "config", "user.name", "Test")
-				git(t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "local", "repo"))
-				git(t, dir, "commit", "--allow-empty", "-m", "init")
+				runGit(t, dir, "init")
+				runGit(t, dir, "config", "user.email", "test@example.com")
+				runGit(t, dir, "config", "user.name", "Test")
+				runGit(t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "local", "repo"))
+				runGit(t, dir, "commit", "--allow-empty", "-m", "init")
 			},
 			wantErr: "local remotes are not supported",
 		},
 		"unsupported provider": {
 			setup: func(t *testing.T, dir string) {
-				git(t, dir, "init")
-				git(t, dir, "config", "user.email", "test@example.com")
-				git(t, dir, "config", "user.name", "Test")
-				git(t, dir, "remote", "add", "origin", "https://unknown.example.com/user/repo.git")
-				git(t, dir, "commit", "--allow-empty", "-m", "init")
+				runGit(t, dir, "init")
+				runGit(t, dir, "config", "user.email", "test@example.com")
+				runGit(t, dir, "config", "user.name", "Test")
+				runGit(t, dir, "remote", "add", "origin", "https://unknown.example.com/user/repo.git")
+				runGit(t, dir, "commit", "--allow-empty", "-m", "init")
 			},
 			wantErr: `unable to find provider for: "unknown.example.com"`,
 		},
@@ -212,21 +216,12 @@ func TestGetURLErrors(t *testing.T) {
 
 func TestGetURLRemote(t *testing.T) {
 	dir := t.TempDir()
-	for _, args := range [][]string{
-		{"init"},
-		{"config", "user.email", "test@example.com"},
-		{"config", "user.name", "Test"},
-		{"config", "commit.gpgsign", "false"},
-		{"remote", "add", "origin", "https://github.com/example/repo.git"},
-		{"remote", "add", "fork", "https://gitlab.com/someone/repo.git"},
-		{"commit", "--allow-empty", "-m", "init"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "remote", "add", "origin", "https://github.com/example/repo.git")
+	runGit(t, dir, "remote", "add", "fork", "https://gitlab.com/someone/repo.git")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "init")
 	t.Chdir(dir)
 
 	if _, err := GetURL("", "", "nope"); err == nil || !strings.Contains(err.Error(), `no such remote: "nope"`) {
@@ -252,22 +247,13 @@ func TestGetURLBareRepo(t *testing.T) {
 	mainDir := t.TempDir()
 	bareDir := t.TempDir()
 
-	run := func(dir string, args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	run(mainDir, "init")
-	run(mainDir, "config", "user.email", "test@example.com")
-	run(mainDir, "config", "user.name", "Test")
-	run(mainDir, "remote", "add", "origin", "https://github.com/example/repo.git")
-	run(mainDir, "commit", "--allow-empty", "-m", "init")
-	run(mainDir, "clone", "--bare", mainDir, bareDir)
-	run(bareDir, "remote", "set-url", "origin", "https://github.com/example/repo.git")
+	runGit(t, mainDir, "init")
+	runGit(t, mainDir, "config", "user.email", "test@example.com")
+	runGit(t, mainDir, "config", "user.name", "Test")
+	runGit(t, mainDir, "remote", "add", "origin", "https://github.com/example/repo.git")
+	runGit(t, mainDir, "commit", "--allow-empty", "-m", "init")
+	runGit(t, mainDir, "clone", "--bare", mainDir, bareDir)
+	runGit(t, bareDir, "remote", "set-url", "origin", "https://github.com/example/repo.git")
 
 	t.Chdir(bareDir)
 
@@ -284,21 +270,12 @@ func TestGetURLWorktree(t *testing.T) {
 	mainDir := t.TempDir()
 	worktreeDir := filepath.Join(t.TempDir(), "wt")
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = mainDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	run("init")
-	run("config", "user.email", "test@example.com")
-	run("config", "user.name", "Test")
-	run("remote", "add", "origin", "https://github.com/example/repo.git")
-	run("commit", "--allow-empty", "-m", "init")
-	run("worktree", "add", "--detach", worktreeDir)
+	runGit(t, mainDir, "init")
+	runGit(t, mainDir, "config", "user.email", "test@example.com")
+	runGit(t, mainDir, "config", "user.name", "Test")
+	runGit(t, mainDir, "remote", "add", "origin", "https://github.com/example/repo.git")
+	runGit(t, mainDir, "commit", "--allow-empty", "-m", "init")
+	runGit(t, mainDir, "worktree", "add", "--detach", worktreeDir)
 
 	if err := os.WriteFile(filepath.Join(worktreeDir, "file.txt"), []byte{}, 0644); err != nil {
 		t.Fatal(err)
