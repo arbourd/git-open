@@ -1,6 +1,6 @@
 ---
 name: git-open
-description: Get the web URL for, or open in the browser, the current Git repo, a file, folder, commit, or line with `git open`. Use when the user asks for a link to code or to open, view, or share the repo, a file, a line, or a commit, e.g. "link me to line 42 of main.go" or "give me a permalink". Not for PRs, issues, CI, blame, or reading local files.
+description: Get the web URL for, or open in the browser, the current Git repo, a file, folder, commit, or line with `git open`. Use when the user asks for a link to code, or to open or share the repo, a file, a line, or a commit, e.g. "link me to line 42 of main.go" or "give me a permalink". Not for PRs, issues, CI, blame, or reading local files.
 ---
 
 # git-open
@@ -14,8 +14,6 @@ description: Get the web URL for, or open in the browser, the current Git repo, 
 3. **Run it inside the repo,** or run `git -C <dir> open` with the same arguments.
 
 ## Recipes
-
-The flag follows the request:
 
 ```sh
 git open -n main.go:42   # "link me to line 42 of main.go": print the URL
