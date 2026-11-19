@@ -1,6 +1,6 @@
 ---
 name: git-open
-description: Get the web URL for, or open in the browser, the current Git repo, a file, folder, commit, or line with `git open`. Use when the user asks for a link to code or to open, view, or share the repo, a file, a line, or a commit, e.g. "link me to line 42 of main.go" or "give me a permalink". Not for PRs, issues, CI, blame, or reading local files.
+description: Get the web URL for, or open in the browser, the current Git repo, a file, folder, commit, or line with `git open`. Use when the user asks for a link to code, or to open or share the repo, a file, a line, or a commit, e.g. "link me to line 42 of main.go" or "give me a permalink". Not for PRs, issues, CI, blame, or reading local files.
 ---
 
 # git-open
@@ -9,13 +9,11 @@ description: Get the web URL for, or open in the browser, the current Git repo, 
 
 ## Rules
 
-1. **Match the flag to the request.** If the user asks to open something in their browser ("open main.go in the browser"), run it without `-n`: that is what launches the browser, and it prints `Opening <url> in your browser.` For anything else, such as a link, a URL, or sharing, pass `-n` (`--no-browser`, before or after the path) and give them the printed URL. When it's unclear which they want, print with `-n` and offer to open it.
-2. **Give the user the printed URL as is.** Path prefixes and line anchors differ by provider (GitLab `/-/tree/main/a.go#L3-5`, Bitbucket `/src/main/a.go#lines-3:5`), so a hand-built or edited URL is likely wrong.
-3. **Run it inside the repo,** or run `git -C <dir> open` with the same arguments.
+1. **Match the flag to the request.** For a browser request, run without `-n`. For a link, URL, permalink, or sharing request, pass `-n` (`--no-browser`) and return the printed URL. If unclear, print with `-n` and offer to open it.
+2. **Return the printed URL unchanged.** Provider path prefixes and line anchors differ (GitLab `/-/tree/main/a.go#L3-5`, Bitbucket `/src/main/a.go#lines-3:5`), so a hand-built URL may be wrong.
+3. **Run in the repo.** For another directory, use `git -C <dir> open` with the same arguments.
 
 ## Recipes
-
-The flag follows the request:
 
 ```sh
 git open -n main.go:42   # "link me to line 42 of main.go": print the URL
@@ -43,12 +41,10 @@ git open -n -r "$(git rev-parse HEAD)" main.go:42
 
 ## Gotchas
 
-- **Ref:** the current branch, or the full SHA when HEAD is detached. `-r` replaces it and is used literally, so `origin/main` 404s; use `main`. `-r` can't be combined with a commit argument.
-- **Not validated:** URLs are built from local state and nothing is checked against the remote. They 404 if the branch or commit isn't pushed, or the path doesn't exist at that ref, and line numbers refer to the pushed file, so uncommitted edits can shift them.
-- **Paths:** relative to the current directory, or absolute. A path missing locally is kept, since it may exist at that ref. A path outside the repo, or `.` at the repo root, gives the tree URL of the ref (on GitHub `.../tree/<branch>`), not the repo root URL.
-- **`:line`:** ignored for directories, and ignored when a file literally named `main.go:42` exists.
-- **Commits:** only a lowercase hex SHA is a commit (it opens the commit page, not the file at that commit), unless a file with that name exists. `HEAD`, branch names, tags, and uppercase SHAs are treated as paths and give a URL that 404s (for example `.../tree/<branch>/HEAD`). Use `-r <ref>` for a branch or tag, and `git rev-parse` to turn `HEAD` into a SHA.
-- **Errors:** they print `error: <message>` and exit 1. `exit status 128` usually means no remote or no commits.
+- **Ref:** the current branch, or the full SHA when HEAD is detached. `-r` replaces it and is used literally, so `origin/main` may 404; use the branch name on the host, such as `main`.
+- **Commits:** a commit argument is a lowercase 7–64 character hex SHA, unless a file by that name exists, and can't be combined with `-r`. `HEAD`, branch names, tags, and uppercase SHAs are treated as paths; use `-r <ref>` for a branch or tag, and `git rev-parse` to resolve `HEAD`.
+- **Paths and lines:** paths are relative to the current directory or absolute. Missing paths are kept because they may exist at the ref. A path outside the repo, or `.` at the repo root, gives the ref's tree URL. A `:line` suffix is ignored for directories and treated literally if that full path exists.
+- **Remote state:** URLs use local Git state and are not checked against the host. An unpushed ref or path absent at that ref can 404; line numbers refer to the pushed file and local edits may shift them.
 
 ## Self-hosted providers
 
