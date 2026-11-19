@@ -7,12 +7,14 @@ git-open \- open a git repository, file, or commit in the browser
 .RI [ path | commit ]
 .SH DESCRIPTION
 .B git-open
-opens the current repository in the web browser. With an argument, it opens
-that file, folder, or commit instead. Providers are matched by the host of the
-remote URL.
+opens the web page of the current repository's remote, at the current branch. With
+an argument, it opens that file, folder, line, or commit instead.
 .PP
-A path that does not exist is still opened, so the URL may 404. A path outside
-the repository, or \fB\&.\fR at its root, opens the tree URL at the ref.
+Hosts build URLs differently, so
+.B git-open
+picks a provider, the URL rules for one host, from the remote URL. Built in are
+github.com, gitlab.com, bitbucket.org, and codeberg.org. To add another, see
+.BR CONFIGURATION .
 .SH OPTIONS
 .TP
 .BR \-r ", " \-\-ref " " \fIref\fR
@@ -52,6 +54,8 @@ A file or folder in the repository. A trailing
 or
 .I :start\-end
 opens that line or range of lines of a file. The suffix is ignored for a folder.
+A path outside the repository, or \fB\&.\fR at its root, opens the tree URL at
+the ref.
 .TP
 .I commit
 A commit hash of 7 to 64 lowercase hexadecimal characters.

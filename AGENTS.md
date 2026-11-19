@@ -5,85 +5,54 @@
 ## Commands
 
 ```sh
-go build .            # produces ./git-open binary
-go vet ./...
 go test -race ./...
 golangci-lint run ./...
 govulncheck ./...
-actionlint            # lint .github/workflows; run after changing anything there (local only; not run in CI)
+actionlint                                 # after changing .github/workflows (local only; not run in CI)
+mandoc -T lint -W warning man/git-open.1   # lint the man page (local only; not run in CI)
 ```
 
-After changing `.github/renovate.json`, validate it: `npx --yes --package renovate -- renovate-config-validator --strict`.
+After changing `.github/renovate.json`, validate it: `bunx --package renovate renovate-config-validator --strict`.
 
 Always add `-n` when running `git open`, `git-open` or `./git-open`; without it, it launches a real browser. Only run it without `-n` when deliberately testing the browser launch, and ask first.
 
-## Layout
-
-```
-main.go                   CLI entry point — processArgs (flags, usage; returns `options`), Version (set by goreleaser ldflags)
-main_test.go              unit test for processArgs (help/version, `-r`/`--ref`, `-R`/`--remote`, `-n`/`--no-browser`, unknown option, too many arguments, `--`)
-man/git-open.1            Man page; shipped in release archives
-skills/git-open/SKILL.md  Agent skill; update whenever the CLI's flags, output, or behavior change
-.goreleaser.yml           Release archives (ship LICENSE*, README*, man/*); ldflags `-s -w -X main.Version`
-.golangci.yml             golangci-lint config (errcheck excludes `(*os.File).Close`)
-.github/workflows/ci.yml  test, lint, vulncheck; snapshot on branches; release on `v*` tags
-open/
-  open.go                 GetURL, InBrowser, path/type/repo parsing
-  provider.go             Provider struct, defaultProviders, Providers/fromConfig, line-format parsing (parseRawLineFormat, validateLineFormat)
-  open_test.go            integration tests
-  provider_test.go        unit + integration tests for provider loading
-gitw/
-  gitw.go                 thin git wrappers: Toplevel, AbsoluteGitDir, RemoteURL, CurrentRef, ConfigGetRegexp
-  gitw_test.go            unit tests for gitw
-```
-
-## Data flow
-
-```
-main() → processArgs → GetURL(arg, ref, remote) → parseType → parsePath (→ stripLine) / getRemoteRef → parseRepository → Provider.{Commit,Path,Root}URL + Provider.lineAnchor
-```
-
-- The repo root is `gitw.Toplevel`, falling back to `gitw.AbsoluteGitDir` (bare repos, worktrees); don't drop the fallback.
-- `getRemoteRef` gets the URL of the `-R` remote (default remote when empty) + current ref via `gitw`; `parseRepository` parses host + repo itself (SCP syntax, URLs, absolute local paths → empty host).
-- SCP (`scpRegex`): `user@` is optional. Without a user, the path must contain `/`, not start with `//`, and not contain `@`, so `https://…`, `mailto:x` and `user:pw@host:…` fall through to `url.Parse`; opaque URLs error.
-- `arg` is `Root` if empty, `Commit` if 7–64 hex chars (unless a file by that name exists), else `Path`.
-- `parsePath` first splits a trailing `:line`/`:start-end` (`stripLine`), only if the literal arg doesn't exist on disk; dropped for directories.
-- A non-empty `--ref` replaces the current ref and skips `CurrentRef`. `Root` becomes `Path` with an empty path (the tree URL), and a `Commit` is an error.
-- Paths missing from disk (including under a file) are kept: `tree/<ref>/<path>`. Only paths outside the repo (and `.` at the root) silently give the ref's tree URL, with or without `--ref`.
-- Providers match by exact host: `defaultProviders` first, then `fromConfig()` (both via `Providers()`).
-- URL pattern: `{BaseURL}/{repo}[/{CommitPrefix|PathPrefix}/{ref/sha}[/{path}]]`, run through `escapePath` (`url.PathEscape`, unescape `/`, trim trailing `/`).
-- `lineAnchor(start, end)` uses `lineFormatRange` (`%d` verbs, from raw `%l` via `parseRawLineFormat`); falls back to single-verb `lineFormat` (dropping `end`) when `end` is 0 or `lineFormatRange` is absent.
-
 ## CLI flags
 
-`processArgs` handles them; `--` makes later args positional.
+`--` makes later args positional.
 
-- Any new flag needs cases in `TestProcessArgs`; update the `usage` const, `man/git-open.1`, `README.md`, and `skills/git-open/SKILL.md` together.
-- `-r`/`--ref <ref>` (also `--ref=<ref>`) takes a value; an empty value, or one starting with `-`, is a missing-value error.
-- `-R`/`--remote <name>` (also `--remote=<name>`) takes a value, validated like `--ref`; an unknown remote is a `no such remote` error.
-- Value flags (`-r`, `-R`) share `optionValue` and are listed in the help/version pre-scan, which skips their value. A new value flag must be added to both, or `-x -v` prints the version. `-R -v` and `-R -- -h` are missing-value errors, not help or version.
+- Any new flag needs cases in `TestProcessArgs`, and `usage`, `man/git-open.1`, `README.md`, and `skills/git-open/SKILL.md` must change together with any flag, output, or behavior change.
+- `-r`/`--ref <ref>` and `-R`/`--remote <name>` (also `--ref=<ref>`, `--remote=<name>`) take a value; an empty value, or one starting with `-`, is a missing-value error. An unknown remote is a `no such remote` error.
+- A non-empty `--ref` replaces the current ref and skips `CurrentRef`. `Root` becomes `Path` with an empty path (the tree URL), and a `Commit` is an error.
+- Value flags share `optionValue` and are listed in the help/version pre-scan, which skips their value. A new value flag must be added to both, or `-x -v` prints the version. `-R -v` and `-R -- -h` are missing-value errors, not help or version.
 - `-n`/`--no-browser` (before or after the path) never opens the browser: it prints only the URL to stdout (a failed write exits 1).
 - `-h`/`--help` and `-v`/`--version` exit 0 and win over `-n` and other args before `--`. Git intercepts `git open --help` (man page), so `-h` is the in-binary path.
-- Unknown options and extra args print `error: <message>` + usage on stderr, exit 1 (`unknown option %q`, `too many arguments: %q`).
+- Unknown options and extra args print `error: <message>` + usage on stderr, exit 1.
 
 ## Hard constraints
 
-**Git operations:** use `gitw` (or `ldez/go-git-cmd-wrapper/v2` directly). In non-test code, never use `exec.Command("git", ...)`. `gitw` wraps `go-git-cmd-wrapper`; empty `path` → cwd.
+**Git operations:** use `gitw` (or `ldez/go-git-cmd-wrapper/v2` directly); never `exec.Command("git", ...)` in non-test code. The repo root is `gitw.Toplevel`, falling back to `gitw.AbsoluteGitDir` (bare repos, worktrees); keep the fallback.
 
-**Error handling:** `fmt.Errorf("context: %w", err)`. Explicit errors: `"local remotes are not supported"`, `"unable to find provider for: <host>"`, `"unable to parse remote url: unsupported format"` (never include the remote; it may carry `user:pw@`), `"no such remote: <name>"` (unwrapped on purpose; git's own error is just `exit status 2`).
+**Error handling:** never put the remote in the parse error; it can carry `user:pw@`. `no such remote` is unwrapped on purpose because git's own error is just `exit status 2`.
 
-**Providers:** defaults are `github.com`, `gitlab.com`, `bitbucket.org`, `codeberg.org`, each with a `rawLineFormat` (fake `%l` verb) converted by `parseRawLineFormat`. Custom: `git config open.<https-url>.{commitprefix,pathprefix,lineformat}` (local wins over global). `commitprefix`/`pathprefix` are required and `BaseURL` must be `http`/`https` with a host, or the provider is skipped. `lineformat` is optional with zero to two `%l` verbs; a missing/invalid one drops only line anchors (stderr warning). `TestDefaultProviders` and `TestDefaultProvidersLineFormat` enforce this for defaults.
+**Providers:**
+
+- Match by exact host: `defaultProviders` first, then git config.
+- Custom: `git config open.<https-url>.{commitprefix,pathprefix,lineformat}` (local wins over global). `commitprefix`/`pathprefix` are required and `BaseURL` must be `http`/`https` with a host, or the provider is skipped.
+- `lineformat` is optional; a missing or invalid one drops only line anchors, with a stderr warning.
+- A new default provider needs URL, line-anchor and line-format test cases; user-specific instances go in `git config`.
+
+**Argument parsing:** `arg` is `Root` if empty, `Commit` if 7–64 hex chars (unless a file by that name exists), else `Path`. A trailing `:line`/`:start-end` is split only if the literal arg doesn't exist on disk, and the line is dropped for directories. Paths missing from disk (including under a file) are kept as `tree/<ref>/<path>`; only paths outside the repo (and `.` at the root) silently give the ref's tree URL, with or without `--ref`.
+
+**Remote parsing:** SCP `user@` is optional. Without a user, the path must contain `/`, not start with `//`, and not contain `@`, so `https://…`, `mailto:x` and `user:pw@host:…` fall through to `url.Parse`; opaque URLs error.
 
 ## Testing
 
-- `TestGetURL` and `TestParsePath` (`open/open_test.go`) run against the real checked-out repo — don't move `open/` without updating them.
-- `TestGetURLErrors`, `TestGetURLBareRepo`, `TestGetURLWorktree`, `TestGetURLRemote` (and `gitw`'s `TestRemoteURL`) use hermetic temp repos.
-- `TestGetURLWindowsAbsolutePath` is Windows-only (drive-letter paths).
-- `TestParseRepository` is table-driven; add a case for any new remote format (its drive-path case is Windows-only).
-- `TestFromConfig`/`TestFromConfigLocal` isolate git config via `GIT_CONFIG_GLOBAL`.
+- Tests that use the real checkout (`TestGetURL`, `TestParsePath`) must be updated if `open/` moves; the others use hermetic temp repos.
+- Keep Windows-only cases behind their guard.
+- A new remote format needs a `TestParseRepository` case.
+- Tests that read git config isolate it via `GIT_CONFIG_GLOBAL`.
 
-## Do not
+## Conventions
 
-- Add logic to `main.go` beyond arg parsing, printing the URL, opening the browser, and error printing; keep URL generation in `open/`.
-- Add a default provider without cases in `TestCommitURL`, `TestPathURL`, `TestLineAnchor`, `TestRootURL`, `TestDefaultProvidersLineFormat` — for user-specific instances prefer `git config` over a hardcoded addition.
-- Hardcode path separators — use `filepath.ToSlash` when building URLs from filesystem paths.
+- Keep `main.go` to arg parsing, printing the URL, opening the browser, and error printing; URL generation lives in `open/`.
+- Build URLs from filesystem paths with `filepath.ToSlash`.
